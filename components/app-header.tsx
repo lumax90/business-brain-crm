@@ -195,7 +195,7 @@ export function AppHeader({ title, subtitle }: AppHeaderProps) {
 
     const fetchNotifications = React.useCallback(async () => {
         try {
-            const res = await apiFetch("http://localhost:3001/api/notifications?limit=30");
+            const res = await apiFetch("/api/notifications?limit=30");
             const data = await res.json();
             if (data.success) {
                 setNotifications(
@@ -234,18 +234,18 @@ export function AppHeader({ title, subtitle }: AppHeaderProps) {
         setNotifications((prev) =>
             prev.map((n) => (n.id === id ? { ...n, read: true } : n))
         );
-        apiFetch(`http://localhost:3001/api/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
+        apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
     };
 
     const markAllAsRead = async () => {
         setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-        apiFetch("http://localhost:3001/api/notifications/read-all", { method: "PATCH" }).catch(() => {});
+        apiFetch("/api/notifications/read-all", { method: "PATCH" }).catch(() => {});
         toast.success("All notifications marked as read");
     };
 
     const dismissNotification = async (id: string) => {
         setNotifications((prev) => prev.filter((n) => n.id !== id));
-        apiFetch(`http://localhost:3001/api/notifications/${id}`, { method: "DELETE" }).catch(() => {});
+        apiFetch(`/api/notifications/${id}`, { method: "DELETE" }).catch(() => {});
     };
 
     // ⌘K shortcut
@@ -276,7 +276,7 @@ export function AppHeader({ title, subtitle }: AppHeaderProps) {
         let cancelled = false;
         setLoading(true);
 
-        apiFetch(`http://localhost:3001/api/global-search?q=${encodeURIComponent(debouncedQuery)}&limit=25`)
+        apiFetch(`/api/global-search?q=${encodeURIComponent(debouncedQuery)}&limit=25`)
             .then((r) => r.json())
             .then((data) => {
                 if (!cancelled) {
@@ -744,7 +744,7 @@ export function AppHeader({ title, subtitle }: AppHeaderProps) {
                                     <button
                                         onClick={() => {
                                             setNotifications([]);
-                                            apiFetch("http://localhost:3001/api/notifications", { method: "DELETE" }).catch(() => {});
+                                            apiFetch("/api/notifications", { method: "DELETE" }).catch(() => {});
                                             toast.info("All notifications cleared");
                                         }}
                                         className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
