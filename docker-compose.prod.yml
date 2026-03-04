@@ -21,8 +21,8 @@ services:
       dockerfile: Dockerfile
     container_name: pixl-sales-brain-api
     restart: unless-stopped
-    ports:
-      - "${BACKEND_PORT:-3001}:3001"
+    expose:
+      - "3001"
     environment:
       NODE_ENV: production
       PORT: 3001
@@ -44,8 +44,8 @@ services:
         NEXT_PUBLIC_SCRAPER_URL: ${NEXT_PUBLIC_SCRAPER_URL:-http://localhost:3001}
     container_name: pixl-sales-brain-web
     restart: unless-stopped
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+    expose:
+      - "3000"
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_SCRAPER_URL: ${NEXT_PUBLIC_SCRAPER_URL:-http://localhost:3001}
