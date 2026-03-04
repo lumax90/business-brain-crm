@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
+import { PendingInvitations } from "@/components/pending-invitations";
 import { useSession } from "@/lib/auth-client";
 
 export default function DashboardLayout({
@@ -38,6 +39,7 @@ export default function DashboardLayout({
         <div className="flex h-screen overflow-hidden">
             <AppSidebar />
             <main className="flex-1 ml-[260px] flex flex-col overflow-hidden transition-all duration-300 ease-in-out">
+                <PendingInvitations />
                 {children}
             </main>
         </div>
