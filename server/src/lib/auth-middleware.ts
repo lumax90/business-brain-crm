@@ -42,12 +42,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
 /**
  * Build a Prisma `where` filter for multi-tenancy.
- * If user has an active organization → filter by organizationId.
+ * If user has an active organization → filter by organizationId ONLY
+ *   (all org members see all org data).
  * Otherwise → filter by userId (personal workspace).
  */
-export function tenantFilter(req: Request): { userId: string; organizationId?: string | null } {
+export function tenantFilter(req: Request): { userId?: string; organizationId?: string | null } {
     if (req.organizationId) {
-        return { userId: req.userId!, organizationId: req.organizationId };
+        return { organizationId: req.organizationId };
     }
     return { userId: req.userId!, organizationId: null };
 }
