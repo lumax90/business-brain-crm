@@ -4,13 +4,13 @@ services:
     container_name: pixl-sales-brain-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-pixl}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pixl_secret_2026}
-      POSTGRES_DB: ${POSTGRES_DB:-pixl_sales_brain}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pixl} -d ${POSTGRES_DB:-pixl_sales_brain}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,8 +26,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pixl}:${POSTGRES_PASSWORD:-pixl_secret_2026}@postgres:5432/${POSTGRES_DB:-pixl_sales_brain}?schema=public
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me-in-production}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3001}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     volumes:
