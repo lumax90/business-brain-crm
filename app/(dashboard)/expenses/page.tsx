@@ -45,12 +45,13 @@ const categoryConfig: Record<string, { label: string; color: string; icon: React
 import { API, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
-function formatCurrency(val: number) {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(val);
+function formatCurrency(val: number, currency = "USD") {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(val);
 }
 
 export default function ExpensesPage() {
     const [expenses, setExpenses] = React.useState<Expense[]>([]);
+    const [settings, setSettings] = React.useState<Record<string, string>>({});
     const [loading, setLoading] = React.useState(true);
     const [showModal, setShowModal] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
@@ -65,17 +66,25 @@ export default function ExpensesPage() {
     const [recurring, setRecurring] = React.useState(false);
     const [recurPeriod, setRecurPeriod] = React.useState("monthly");
     const [notes, setNotes] = React.useState("");
+    const [newCurrency, setNewCurrency] = React.useState("USD");
 
     const fetchExpenses = async () => {
         try {
-            const res = await apiFetch(`${API}/api/expenses`);
-            const data = await res.json();
-            if (data.success) setExpenses(data.expenses);
+            const [expRes, setRes] = await Promise.all([
+                apiFetch(`${API}/api/expenses`).then((r) => r.json()),
+                apiFetch(`${API}/api/settings`).then((r) => r.json()).catch(() => ({ settings: {} })),
+            ]);
+            if (expRes.success) setExpenses(expRes.expenses);
+            setSettings(setRes.settings || {});
+            setNewCurrency(setRes.settings?.PRIMARY_CURRENCY || "USD");
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
     };
 
     React.useEffect(() => { fetchExpenses(); }, []);
+
+    const primaryCurrency = settings["PRIMARY_CURRENCY"] || "USD";
+    const secondaryCurrency = settings["SECONDARY_CURRENCY"] && settings["SECONDARY_CURRENCY"] !== "None" ? settings["SECONDARY_CURRENCY"] : null;
 
     const filtered = React.useMemo(() => {
         if (filterCat === "all") return expenses;
@@ -84,6 +93,32 @@ export default function ExpensesPage() {
 
     const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
     const recurringTotal = expenses.filter((e) => e.recurring).reduce((s, e) => s + e.amount, 0);
+
+    const sumByCurrency = (items: Expense[], filterFn: (e: Expense) => boolean) => {
+        return items.filter(filterFn).reduce((acc: Record<string, number>, e) => {
+            const cur = e.currency || "USD";
+            acc[cur] = (acc[cur] || 0) + e.amount;
+            return acc;
+        }, {});
+    };
+
+    const renderDualAmount = (byCurrency: Record<string, number>, colorClass = "text-foreground") => {
+        const entries = Object.entries(byCurrency).filter(([, v]) => v !== 0);
+        if (entries.length === 0) return <span className={cn("text-xl font-bold", colorClass)}>{formatCurrency(0, primaryCurrency)}</span>;
+        return (
+            <div className="flex items-baseline gap-2 flex-wrap">
+                {entries.map(([cur, val], idx) => (
+                    <span key={cur} className={cn("text-xl font-bold", colorClass)}>
+                        {idx > 0 && <span className="text-muted-foreground font-normal text-sm mr-1">/</span>}
+                        {formatCurrency(val, cur)}
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
+    const totalByCurrency = sumByCurrency(expenses, () => true);
+    const recurringByCurrency = sumByCurrency(expenses, (e) => e.recurring);
 
     const byCategory = React.useMemo(() => {
         const map: Record<string, number> = {};
@@ -107,6 +142,7 @@ export default function ExpensesPage() {
                     recurring,
                     recurPeriod: recurring ? recurPeriod : null,
                     notes: notes.trim() || null,
+                    currency: newCurrency,
                 }),
             });
             const data = await res.json();
@@ -130,6 +166,7 @@ export default function ExpensesPage() {
         setDescription(""); setCategory("other"); setAmount("");
         setDate(new Date().toISOString().slice(0, 10)); setVendor("");
         setRecurring(false); setRecurPeriod("monthly"); setNotes("");
+        setNewCurrency(primaryCurrency);
     };
 
     if (loading) {
@@ -145,19 +182,19 @@ export default function ExpensesPage() {
 
     return (
         <>
-            <AppHeader title="Expenses" subtitle={`${expenses.length} expenses · ${formatCurrency(totalExpenses)} total`} />
+            <AppHeader title="Expenses" subtitle={`${expenses.length} expenses`} />
             <div className="p-6 space-y-6">
                 {/* Summary */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="rounded-xl border border-border bg-card p-4">
                         <p className="text-xs text-muted-foreground mb-1">Total Expenses</p>
-                        <p className="text-xl font-bold text-foreground">{formatCurrency(totalExpenses)}</p>
+                        {renderDualAmount(totalByCurrency)}
                     </div>
                     <div className="rounded-xl border border-border bg-card p-4">
                         <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                             <RiLoopLeftLine className="w-3 h-3" /> Recurring
                         </div>
-                        <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(recurringTotal)}</p>
+                        {renderDualAmount(recurringByCurrency, "text-amber-600 dark:text-amber-400")}
                     </div>
                     {byCategory.slice(0, 2).map(([cat, total]) => {
                         const cfg = categoryConfig[cat] || categoryConfig.other;
@@ -166,7 +203,7 @@ export default function ExpensesPage() {
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
                                     {cfg.icon} {cfg.label}
                                 </div>
-                                <p className="text-xl font-bold text-foreground">{formatCurrency(total)}</p>
+                                <p className="text-xl font-bold text-foreground">{formatCurrency(total, primaryCurrency)}</p>
                             </div>
                         );
                     })}
@@ -235,7 +272,7 @@ export default function ExpensesPage() {
                                         <td className="py-3 px-4 text-muted-foreground text-xs hidden md:table-cell">{exp.vendor || "—"}</td>
                                         <td className="py-3 px-4 text-muted-foreground text-xs hidden lg:table-cell">{exp.date}</td>
                                         <td className="py-3 px-4 text-right">
-                                            <span className="font-bold text-foreground">{formatCurrency(exp.amount)}</span>
+                                            <span className="font-bold text-foreground">{formatCurrency(exp.amount, exp.currency)}</span>
                                         </td>
                                         <td className="py-3 px-4 text-right">
                                             <button onClick={() => handleDelete(exp.id)}
@@ -267,11 +304,19 @@ export default function ExpensesPage() {
                                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30" placeholder="e.g. Vercel Pro Plan" autoFocus />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <label className="text-xs font-medium text-foreground">Amount ($) *</label>
+                                    <label className="text-xs font-medium text-foreground">Amount *</label>
                                     <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
                                         className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30" placeholder="0.00" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-foreground">Currency</label>
+                                    <select value={newCurrency} onChange={(e) => setNewCurrency(e.target.value)}
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30">
+                                        <option value={primaryCurrency}>{primaryCurrency}</option>
+                                        {secondaryCurrency && <option value={secondaryCurrency}>{secondaryCurrency}</option>}
+                                    </select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-foreground">Date *</label>

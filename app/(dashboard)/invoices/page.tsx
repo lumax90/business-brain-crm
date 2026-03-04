@@ -69,6 +69,7 @@ function formatCurrency(val: number, currency = "USD") {
 export default function InvoicesPage() {
     const [invoices, setInvoices] = React.useState<Invoice[]>([]);
     const [crmContacts, setCrmContacts] = React.useState<CrmContact[]>([]);
+    const [settings, setSettings] = React.useState<Record<string, string>>({});
     const [loading, setLoading] = React.useState(true);
     const [showModal, setShowModal] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
@@ -84,20 +85,27 @@ export default function InvoicesPage() {
     const [taxRate, setTaxRate] = React.useState("0");
     const [notes, setNotes] = React.useState("");
     const [items, setItems] = React.useState<LineItem[]>([{ description: "", qty: 1, unitPrice: 0, total: 0 }]);
+    const [newCurrency, setNewCurrency] = React.useState("USD");
 
     const fetchData = async () => {
         try {
-            const [invRes, conRes] = await Promise.all([
+            const [invRes, conRes, setRes] = await Promise.all([
                 apiFetch(`${API}/api/invoices`).then((r) => r.json()),
                 apiFetch(`${API}/api/contacts`).then((r) => r.json()),
+                apiFetch(`${API}/api/settings`).then((r) => r.json()).catch(() => ({ settings: {} })),
             ]);
             if (invRes.success) setInvoices(invRes.invoices);
             if (conRes.success) setCrmContacts(conRes.contacts);
+            setSettings(setRes.settings || {});
+            setNewCurrency(setRes.settings?.PRIMARY_CURRENCY || "USD");
         } catch (err) { console.error("Fetch error:", err); }
         finally { setLoading(false); }
     };
 
     React.useEffect(() => { fetchData(); }, []);
+
+    const primaryCurrency = settings["PRIMARY_CURRENCY"] || "USD";
+    const secondaryCurrency = settings["SECONDARY_CURRENCY"] && settings["SECONDARY_CURRENCY"] !== "None" ? settings["SECONDARY_CURRENCY"] : null;
 
     // When a CRM contact is selected, auto-fill name/email/company
     const handleContactSelect = (contactId: string) => {
@@ -116,12 +124,34 @@ export default function InvoicesPage() {
         return invoices.filter((inv) => inv.status === filter);
     }, [invoices, filter]);
 
-    const totals = React.useMemo(() => {
-        const paid = invoices.filter((i) => i.status === "paid").reduce((s, i) => s + i.total, 0);
-        const outstanding = invoices.filter((i) => ["sent", "overdue"].includes(i.status)).reduce((s, i) => s + i.total, 0);
-        const draft = invoices.filter((i) => i.status === "draft").reduce((s, i) => s + i.total, 0);
-        return { paid, outstanding, draft };
-    }, [invoices]);
+    const sumByCurrency = (items: Invoice[], filterFn: (i: Invoice) => boolean) => {
+        return items.filter(filterFn).reduce((acc: Record<string, number>, i) => {
+            const cur = i.currency || "USD";
+            acc[cur] = (acc[cur] || 0) + i.total;
+            return acc;
+        }, {});
+    };
+
+    const renderDualAmount = (byCurrency: Record<string, number>, colorClass = "text-foreground") => {
+        const entries = Object.entries(byCurrency).filter(([, v]) => v !== 0);
+        if (entries.length === 0) return <span className={cn("text-xl font-bold", colorClass)}>{formatCurrency(0, primaryCurrency)}</span>;
+        return (
+            <div className="flex items-baseline gap-2 flex-wrap">
+                {entries.map(([cur, val], idx) => (
+                    <span key={cur} className={cn("text-xl font-bold", colorClass)}>
+                        {idx > 0 && <span className="text-muted-foreground font-normal text-sm mr-1">/</span>}
+                        {formatCurrency(val, cur)}
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
+    const totals = React.useMemo(() => ({
+        paid: sumByCurrency(invoices, (i) => i.status === "paid"),
+        outstanding: sumByCurrency(invoices, (i) => ["sent", "overdue"].includes(i.status)),
+        draft: sumByCurrency(invoices, (i) => i.status === "draft"),
+    }), [invoices]);
 
     const updateItem = (index: number, field: keyof LineItem, value: string | number) => {
         setItems((prev) => {
@@ -154,6 +184,7 @@ export default function InvoicesPage() {
                     items: items.filter((i) => i.description.trim()),
                     taxRate: parseFloat(taxRate) || 0,
                     notes: notes.trim() || null,
+                    currency: newCurrency,
                 }),
             });
             const data = await res.json();
@@ -190,6 +221,7 @@ export default function InvoicesPage() {
         setIssueDate(new Date().toISOString().slice(0, 10)); setDueDate("");
         setTaxRate("0"); setNotes("");
         setItems([{ description: "", qty: 1, unitPrice: 0, total: 0 }]);
+        setNewCurrency(primaryCurrency);
     };
 
     if (loading) {
@@ -214,21 +246,21 @@ export default function InvoicesPage() {
                             <RiCheckboxCircleLine className="w-3.5 h-3.5 text-emerald-500" />
                             Paid
                         </div>
-                        <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(totals.paid)}</p>
+                        {renderDualAmount(totals.paid, "text-emerald-600 dark:text-emerald-400")}
                     </div>
                     <div className="rounded-xl border border-border bg-card p-4">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                             <RiTimeLine className="w-3.5 h-3.5 text-amber-500" />
                             Outstanding
                         </div>
-                        <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totals.outstanding)}</p>
+                        {renderDualAmount(totals.outstanding, "text-amber-600 dark:text-amber-400")}
                     </div>
                     <div className="rounded-xl border border-border bg-card p-4">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                             <RiDraftLine className="w-3.5 h-3.5 text-stone-500" />
                             Draft
                         </div>
-                        <p className="text-xl font-bold text-foreground">{formatCurrency(totals.draft)}</p>
+                        {renderDualAmount(totals.draft)}
                     </div>
                 </div>
 
@@ -285,7 +317,7 @@ export default function InvoicesPage() {
                                                 {status.icon}{status.label}
                                             </span>
                                         </td>
-                                        <td className="py-3 px-4 text-right"><span className="font-bold text-foreground">{formatCurrency(inv.total)}</span></td>
+                                        <td className="py-3 px-4 text-right"><span className="font-bold text-foreground">{formatCurrency(inv.total, inv.currency)}</span></td>
                                         <td className="py-3 px-4 text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 {inv.status === "draft" && (
@@ -374,6 +406,16 @@ export default function InvoicesPage() {
                                 </div>
                             </div>
 
+                            {/* Currency */}
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-foreground">Currency</label>
+                                <select value={newCurrency} onChange={(e) => setNewCurrency(e.target.value)}
+                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30">
+                                    <option value={primaryCurrency}>{primaryCurrency}</option>
+                                    {secondaryCurrency && <option value={secondaryCurrency}>{secondaryCurrency}</option>}
+                                </select>
+                            </div>
+
                             {/* Line Items */}
                             <div className="space-y-2">
                                 <label className="text-xs font-medium text-foreground">Line Items</label>
@@ -385,7 +427,7 @@ export default function InvoicesPage() {
                                             className="h-8 w-16 rounded-md border border-input bg-background px-2 text-xs text-center focus:outline-none focus:ring-2 focus:ring-ring/30" />
                                         <input type="number" placeholder="Price" value={item.unitPrice || ""} onChange={(e) => updateItem(idx, "unitPrice", parseFloat(e.target.value) || 0)}
                                             className="h-8 w-24 rounded-md border border-input bg-background px-2 text-xs text-right focus:outline-none focus:ring-2 focus:ring-ring/30" />
-                                        <span className="text-xs font-medium text-foreground w-20 text-right">{formatCurrency(item.qty * item.unitPrice)}</span>
+                                        <span className="text-xs font-medium text-foreground w-20 text-right">{formatCurrency(item.qty * item.unitPrice, newCurrency)}</span>
                                         {items.length > 1 && (
                                             <button onClick={() => removeItem(idx)} className="p-1 rounded text-muted-foreground hover:text-rose-500"><RiCloseLine className="w-3.5 h-3.5" /></button>
                                         )}
@@ -404,9 +446,9 @@ export default function InvoicesPage() {
                                         className="h-7 w-16 rounded-md border border-input bg-background px-2 text-xs text-center focus:outline-none focus:ring-2 focus:ring-ring/30" />
                                 </div>
                                 <div className="text-right space-y-0.5">
-                                    <p className="text-xs text-muted-foreground">Subtotal: {formatCurrency(subtotal)}</p>
-                                    {tax > 0 && <p className="text-xs text-muted-foreground">Tax: {formatCurrency(tax)}</p>}
-                                    <p className="text-sm font-bold text-foreground">Total: {formatCurrency(grandTotal)}</p>
+                                    <p className="text-xs text-muted-foreground">Subtotal: {formatCurrency(subtotal, newCurrency)}</p>
+                                    {tax > 0 && <p className="text-xs text-muted-foreground">Tax: {formatCurrency(tax, newCurrency)}</p>}
+                                    <p className="text-sm font-bold text-foreground">Total: {formatCurrency(grandTotal, newCurrency)}</p>
                                 </div>
                             </div>
 

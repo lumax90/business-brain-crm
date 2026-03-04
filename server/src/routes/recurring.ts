@@ -26,7 +26,7 @@ recurringRouter.get("/", async (req: Request, res: Response) => {
 // ─── POST /api/recurring — Create recurring item ───
 recurringRouter.post("/", async (req: Request, res: Response) => {
     try {
-        const { name, type, amount, frequency, category, nextDueDate, startDate, endDate, notes, companyId } = req.body;
+        const { name, type, amount, frequency, category, nextDueDate, startDate, endDate, notes, companyId, currency } = req.body;
         if (!name || !type) { res.status(400).json({ error: "name and type are required" }); return; }
 
         const item = await prisma.recurringItem.create({
@@ -40,6 +40,7 @@ recurringRouter.post("/", async (req: Request, res: Response) => {
                 endDate: endDate || null,
                 notes: notes || null,
                 companyId: companyId || null,
+                currency: currency || "USD",
                 ...tenantData(req),
             },
             include: { company: { select: { id: true, name: true } } },
@@ -64,7 +65,7 @@ recurringRouter.post("/", async (req: Request, res: Response) => {
 recurringRouter.put("/:id", async (req: Request, res: Response) => {
     try {
         const data: any = {};
-        const strFields = ["name", "type", "frequency", "category", "nextDueDate", "startDate", "endDate", "notes", "companyId"];
+        const strFields = ["name", "type", "frequency", "category", "nextDueDate", "startDate", "endDate", "notes", "companyId", "currency"];
         for (const f of strFields) { if (req.body[f] !== undefined) data[f] = req.body[f]; }
         if (req.body.amount !== undefined) data.amount = parseFloat(req.body.amount) || 0;
         if (req.body.isActive !== undefined) data.isActive = req.body.isActive;

@@ -41,8 +41,8 @@ interface CrmCompany { id: string; name: string }
 import { API, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
-function formatCurrency(val: number) {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(val);
+function formatCurrency(val: number, currency = "USD") {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(val);
 }
 
 const freqLabels: Record<string, string> = {
@@ -55,6 +55,7 @@ const freqLabels: Record<string, string> = {
 export default function RecurringPage() {
     const [items, setItems] = React.useState<RecurringItem[]>([]);
     const [companies, setCompanies] = React.useState<CrmCompany[]>([]);
+    const [settings, setSettings] = React.useState<Record<string, string>>({});
     const [summary, setSummary] = React.useState({ activeRevenue: 0, activeExpense: 0, net: 0 });
     const [loading, setLoading] = React.useState(true);
     const [showModal, setShowModal] = React.useState(false);
@@ -72,23 +73,57 @@ export default function RecurringPage() {
     const [endDate, setEndDate] = React.useState("");
     const [companyId, setCompanyId] = React.useState("");
     const [notes, setNotes] = React.useState("");
+    const [newCurrency, setNewCurrency] = React.useState("USD");
 
     const fetchData = async () => {
         try {
-            const [rRes, cRes] = await Promise.all([
+            const [rRes, cRes, setRes] = await Promise.all([
                 apiFetch(`${API}/api/recurring`).then((r) => r.json()),
                 apiFetch(`${API}/api/companies`).then((r) => r.json()),
+                apiFetch(`${API}/api/settings`).then((r) => r.json()).catch(() => ({ settings: {} })),
             ]);
             if (rRes.success) {
                 setItems(rRes.items);
                 setSummary(rRes.summary);
             }
             if (cRes.success) setCompanies(cRes.companies);
+            setSettings(setRes.settings || {});
+            setNewCurrency(setRes.settings?.PRIMARY_CURRENCY || "USD");
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
     };
 
     React.useEffect(() => { fetchData(); }, []);
+
+    const primaryCurrency = settings["PRIMARY_CURRENCY"] || "USD";
+    const secondaryCurrency = settings["SECONDARY_CURRENCY"] && settings["SECONDARY_CURRENCY"] !== "None" ? settings["SECONDARY_CURRENCY"] : null;
+
+    const sumByCurrency = (filterFn: (i: RecurringItem) => boolean) => {
+        return items.filter(filterFn).reduce((acc: Record<string, number>, i) => {
+            const cur = i.currency || "USD";
+            acc[cur] = (acc[cur] || 0) + i.amount;
+            return acc;
+        }, {});
+    };
+
+    const renderDualAmount = (byCurrency: Record<string, number>, colorClass = "text-foreground", suffix = "") => {
+        const entries = Object.entries(byCurrency).filter(([, v]) => v !== 0);
+        if (entries.length === 0) return <span className={cn("text-xl font-bold", colorClass)}>{formatCurrency(0, primaryCurrency)}{suffix && <span className="text-xs text-muted-foreground font-medium ml-1">{suffix}</span>}</span>;
+        return (
+            <div className="flex items-baseline gap-2 flex-wrap">
+                {entries.map(([cur, val], idx) => (
+                    <span key={cur} className={cn("text-xl font-bold", colorClass)}>
+                        {idx > 0 && <span className="text-muted-foreground font-normal text-sm mr-1">/</span>}
+                        {formatCurrency(val, cur)}
+                    </span>
+                ))}
+                {suffix && <span className="text-xs text-muted-foreground font-medium">{suffix}</span>}
+            </div>
+        );
+    };
+
+    const revenueByCurrency = React.useMemo(() => sumByCurrency((i) => i.type === "revenue" && i.isActive), [items]);
+    const expenseByCurrency = React.useMemo(() => sumByCurrency((i) => i.type === "expense" && i.isActive), [items]);
 
     const filtered = React.useMemo(() => {
         if (filterType === "all") return items;
@@ -107,6 +142,7 @@ export default function RecurringPage() {
                     frequency, category, nextDueDate: nextDueDate || null,
                     startDate: startDate || null, endDate: endDate || null,
                     companyId: companyId || null, notes: notes || null,
+                    currency: newCurrency,
                 }),
             });
             const data = await res.json();
@@ -142,6 +178,7 @@ export default function RecurringPage() {
         setName(""); setType("revenue"); setAmount(""); setFrequency("monthly"); setCategory("general");
         setNextDueDate(""); setStartDate(new Date().toISOString().slice(0, 10)); setEndDate("");
         setCompanyId(""); setNotes("");
+        setNewCurrency(primaryCurrency);
     };
 
     if (loading) {
@@ -165,20 +202,20 @@ export default function RecurringPage() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                             <RiArrowUpLine className="w-3.5 h-3.5 text-emerald-500" /> Active Revenue
                         </div>
-                        <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(summary.activeRevenue)}<span className="text-xs text-muted-foreground font-medium ml-1">/ cycle</span></p>
+                        {renderDualAmount(revenueByCurrency, "text-emerald-600 dark:text-emerald-400", "/ cycle")}
                     </div>
                     <div className="rounded-xl border border-border bg-card p-4">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                             <RiArrowDownLine className="w-3.5 h-3.5 text-rose-500" /> Active Expenses
                         </div>
-                        <p className="text-xl font-bold text-rose-600 dark:text-rose-400">{formatCurrency(summary.activeExpense)}<span className="text-xs text-muted-foreground font-medium ml-1">/ cycle</span></p>
+                        {renderDualAmount(expenseByCurrency, "text-rose-600 dark:text-rose-400", "/ cycle")}
                     </div>
                     <div className={cn("rounded-xl border border-border p-4", summary.net >= 0 ? "bg-emerald-500/5 border-emerald-500/20" : "bg-rose-500/5 border-rose-500/20")}>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                             <RiLoopLeftLine className="w-3.5 h-3.5" /> Net Flow
                         </div>
                         <p className={cn("text-xl font-bold", summary.net >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-                            {formatCurrency(summary.net)}<span className="text-xs text-muted-foreground font-medium ml-1">/ cycle</span>
+                            {formatCurrency(summary.net, primaryCurrency)}<span className="text-xs text-muted-foreground font-medium ml-1">/ cycle</span>
                         </p>
                     </div>
                 </div>
@@ -266,7 +303,7 @@ export default function RecurringPage() {
                                     </td>
                                     <td className="py-3 px-4 text-right">
                                         <span className={cn("font-bold", item.type === "revenue" ? "text-emerald-500" : "text-rose-500", !item.isActive && "opacity-50")}>
-                                            {item.type === "revenue" ? "+" : "-"}{formatCurrency(item.amount)}
+                                            {item.type === "revenue" ? "+" : "-"}{formatCurrency(item.amount, item.currency)}
                                         </span>
                                     </td>
                                     <td className="py-3 px-4 text-right">
@@ -315,11 +352,21 @@ export default function RecurringPage() {
                                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30" placeholder="e.g. Monthly Software Sub" />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-3 gap-3">
                                 <div className="space-y-1">
-                                    <label className="text-xs font-medium text-foreground">Amount ($) *</label>
+                                    <label className="text-xs font-medium text-foreground">Amount *</label>
                                     <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
                                         className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30" placeholder="0.00" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-foreground">Currency</label>
+                                    <select value={newCurrency} onChange={(e) => setNewCurrency(e.target.value)}
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30">
+                                        <option value="USD">USD ($)</option>
+                                        <option value="EUR">EUR (€)</option>
+                                        <option value="TRY">TRY (₺)</option>
+                                        <option value="GBP">GBP (£)</option>
+                                    </select>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-foreground">Frequency</label>

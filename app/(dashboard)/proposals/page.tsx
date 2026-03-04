@@ -34,6 +34,7 @@ interface Proposal {
     taxRate: number;
     taxAmount: number;
     total: number;
+    currency: string;
     notes: string | null;
     terms: string | null;
     convertedToInvoiceId: string | null;
@@ -55,13 +56,14 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.R
 import { API, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
-function formatCurrency(val: number) {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(val);
+function formatCurrency(val: number, currency = "USD") {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(val);
 }
 
 export default function ProposalsPage() {
     const [proposals, setProposals] = React.useState<Proposal[]>([]);
     const [crmContacts, setCrmContacts] = React.useState<CrmContact[]>([]);
+    const [settings, setSettings] = React.useState<Record<string, string>>({});
     const [loading, setLoading] = React.useState(true);
     const [showModal, setShowModal] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
@@ -78,20 +80,50 @@ export default function ProposalsPage() {
     const [notes, setNotes] = React.useState("");
     const [terms, setTerms] = React.useState("");
     const [items, setItems] = React.useState<LineItem[]>([{ description: "", qty: 1, unitPrice: 0, total: 0 }]);
+    const [newCurrency, setNewCurrency] = React.useState("USD");
 
     const fetchData = async () => {
         try {
-            const [pRes, cRes] = await Promise.all([
+            const [pRes, cRes, setRes] = await Promise.all([
                 apiFetch(`${API}/api/proposals`).then((r) => r.json()),
                 apiFetch(`${API}/api/contacts`).then((r) => r.json()),
+                apiFetch(`${API}/api/settings`).then((r) => r.json()).catch(() => ({ settings: {} })),
             ]);
             if (pRes.success) setProposals(pRes.proposals);
             if (cRes.success) setCrmContacts(cRes.contacts);
+            setSettings(setRes.settings || {});
+            setNewCurrency(setRes.settings?.PRIMARY_CURRENCY || "USD");
         } catch (err) { console.error(err); }
         finally { setLoading(false); }
     };
 
     React.useEffect(() => { fetchData(); }, []);
+
+    const primaryCurrency = settings["PRIMARY_CURRENCY"] || "USD";
+    const secondaryCurrency = settings["SECONDARY_CURRENCY"] && settings["SECONDARY_CURRENCY"] !== "None" ? settings["SECONDARY_CURRENCY"] : null;
+
+    const sumByCurrency = (filterFn: (p: Proposal) => boolean) => {
+        return proposals.filter(filterFn).reduce((acc: Record<string, number>, p) => {
+            const cur = p.currency || "USD";
+            acc[cur] = (acc[cur] || 0) + p.total;
+            return acc;
+        }, {});
+    };
+
+    const renderDualAmount = (byCurrency: Record<string, number>, colorClass = "text-foreground") => {
+        const entries = Object.entries(byCurrency).filter(([, v]) => v !== 0);
+        if (entries.length === 0) return <span className={cn("text-xl font-bold", colorClass)}>{formatCurrency(0, primaryCurrency)}</span>;
+        return (
+            <div className="flex items-baseline gap-2 flex-wrap">
+                {entries.map(([cur, val], idx) => (
+                    <span key={cur} className={cn("text-xl font-bold", colorClass)}>
+                        {idx > 0 && <span className="text-muted-foreground font-normal text-sm mr-1">/</span>}
+                        {formatCurrency(val, cur)}
+                    </span>
+                ))}
+            </div>
+        );
+    };
 
     const handleContactSelect = (contactId: string) => {
         setSelectedContactId(contactId);
@@ -111,6 +143,10 @@ export default function ProposalsPage() {
         const draft = proposals.filter((p) => p.status === "draft").reduce((s, p) => s + p.total, 0);
         return { sent, accepted, draft };
     }, [proposals]);
+
+    const acceptedByCurrency = React.useMemo(() => sumByCurrency((p) => p.status === "accepted"), [proposals]);
+    const sentByCurrency = React.useMemo(() => sumByCurrency((p) => p.status === "sent"), [proposals]);
+    const draftByCurrency = React.useMemo(() => sumByCurrency((p) => p.status === "draft"), [proposals]);
 
     const updateItem = (index: number, field: keyof LineItem, value: string | number) => {
         setItems((prev) => {
@@ -140,8 +176,7 @@ export default function ProposalsPage() {
                     validUntil: validUntil || null,
                     items: items.filter((i) => i.description.trim()),
                     taxRate: parseFloat(taxRate) || 0,
-                    notes: notes.trim() || null, terms: terms.trim() || null,
-                }),
+                    notes: notes.trim() || null, terms: terms.trim() || null,                    currency: newCurrency,                }),
             });
             const data = await res.json();
             if (data.success) { setProposals((prev) => [data.proposal, ...prev]); setShowModal(false); resetForm(); toast.success("Proposal created."); }
@@ -176,6 +211,7 @@ export default function ProposalsPage() {
         setSelectedContactId(""); setTitle(""); setClientName(""); setClientEmail(""); setClientCompany("");
         setValidUntil(""); setTaxRate("0"); setNotes(""); setTerms("");
         setItems([{ description: "", qty: 1, unitPrice: 0, total: 0 }]);
+        setNewCurrency(primaryCurrency);
     };
 
     if (loading) {
@@ -199,19 +235,19 @@ export default function ProposalsPage() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                             <RiCheckboxCircleLine className="w-3.5 h-3.5 text-emerald-500" /> Accepted
                         </div>
-                        <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(totals.accepted)}</p>
+                        {renderDualAmount(acceptedByCurrency, "text-emerald-600 dark:text-emerald-400")}
                     </div>
                     <div className="rounded-xl border border-border bg-card p-4">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                             <RiMailSendLine className="w-3.5 h-3.5 text-blue-500" /> Pending (Sent)
                         </div>
-                        <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(totals.sent)}</p>
+                        {renderDualAmount(sentByCurrency, "text-blue-600 dark:text-blue-400")}
                     </div>
                     <div className="rounded-xl border border-border bg-card p-4">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                             <RiDraftLine className="w-3.5 h-3.5 text-stone-500" /> Draft
                         </div>
-                        <p className="text-xl font-bold text-foreground">{formatCurrency(totals.draft)}</p>
+                        {renderDualAmount(draftByCurrency)}
                     </div>
                 </div>
 
@@ -274,7 +310,7 @@ export default function ProposalsPage() {
                                                 <span className="ml-1 text-[10px] text-emerald-500 font-medium">→ Invoice</span>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 text-right"><span className="font-bold text-foreground">{formatCurrency(prop.total)}</span></td>
+                                        <td className="py-3 px-4 text-right"><span className="font-bold text-foreground">{formatCurrency(prop.total, prop.currency)}</span></td>
                                         <td className="py-3 px-4 text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 {prop.status === "draft" && (
@@ -361,6 +397,18 @@ export default function ProposalsPage() {
                                 </div>
                             </div>
 
+                            {/* Currency */}
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-foreground">Currency</label>
+                                <select value={newCurrency} onChange={(e) => setNewCurrency(e.target.value)}
+                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30">
+                                    <option value="USD">USD ($)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                    <option value="TRY">TRY (₺)</option>
+                                    <option value="GBP">GBP (£)</option>
+                                </select>
+                            </div>
+
                             {/* Line Items */}
                             <div className="space-y-2">
                                 <label className="text-xs font-medium text-foreground">Line Items</label>
@@ -372,7 +420,7 @@ export default function ProposalsPage() {
                                             className="h-8 w-16 rounded-md border border-input bg-background px-2 text-xs text-center focus:outline-none focus:ring-2 focus:ring-ring/30" />
                                         <input type="number" placeholder="Price" value={item.unitPrice || ""} onChange={(e) => updateItem(idx, "unitPrice", parseFloat(e.target.value) || 0)}
                                             className="h-8 w-24 rounded-md border border-input bg-background px-2 text-xs text-right focus:outline-none focus:ring-2 focus:ring-ring/30" />
-                                        <span className="text-xs font-medium text-foreground w-20 text-right">{formatCurrency(item.qty * item.unitPrice)}</span>
+                                        <span className="text-xs font-medium text-foreground w-20 text-right">{formatCurrency(item.qty * item.unitPrice, newCurrency)}</span>
                                         {items.length > 1 && (
                                             <button onClick={() => removeItem(idx)} className="p-1 rounded text-muted-foreground hover:text-rose-500"><RiCloseLine className="w-3.5 h-3.5" /></button>
                                         )}
@@ -391,9 +439,9 @@ export default function ProposalsPage() {
                                         className="h-7 w-16 rounded-md border border-input bg-background px-2 text-xs text-center focus:outline-none focus:ring-2 focus:ring-ring/30" />
                                 </div>
                                 <div className="text-right space-y-0.5">
-                                    <p className="text-xs text-muted-foreground">Subtotal: {formatCurrency(subtotal)}</p>
-                                    {tax > 0 && <p className="text-xs text-muted-foreground">Tax: {formatCurrency(tax)}</p>}
-                                    <p className="text-sm font-bold text-foreground">Total: {formatCurrency(grandTotal)}</p>
+                                    <p className="text-xs text-muted-foreground">Subtotal: {formatCurrency(subtotal, newCurrency)}</p>
+                                    {tax > 0 && <p className="text-xs text-muted-foreground">Tax: {formatCurrency(tax, newCurrency)}</p>}
+                                    <p className="text-sm font-bold text-foreground">Total: {formatCurrency(grandTotal, newCurrency)}</p>
                                 </div>
                             </div>
 

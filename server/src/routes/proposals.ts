@@ -33,7 +33,7 @@ proposalsRouter.get("/", async (req: Request, res: Response) => {
 // ─── POST /api/proposals — Create proposal ───
 proposalsRouter.post("/", async (req: Request, res: Response) => {
     try {
-        const { title, clientName, clientEmail, clientCompany, validUntil, items, taxRate, notes, terms, companyId, contactId } = req.body;
+        const { title, clientName, clientEmail, clientCompany, validUntil, items, taxRate, notes, terms, companyId, contactId, currency } = req.body;
         if (!clientName || !title) { res.status(400).json({ error: "title and clientName are required" }); return; }
 
         const parsedItems = Array.isArray(items) ? items : [];
@@ -53,6 +53,7 @@ proposalsRouter.post("/", async (req: Request, res: Response) => {
                 items: JSON.stringify(parsedItems),
                 subtotal, taxRate: rate, taxAmount, total,
                 notes: notes || null, terms: terms || null,
+                currency: currency || "USD",
                 companyId: companyId || null, contactId: contactId || null,
                 ...tenantData(req),
             },
@@ -81,7 +82,7 @@ proposalsRouter.post("/", async (req: Request, res: Response) => {
 proposalsRouter.put("/:id", async (req: Request, res: Response) => {
     try {
         const data: any = {};
-        const fields = ["title", "clientName", "clientEmail", "clientCompany", "status", "validUntil", "notes", "terms", "companyId", "contactId"];
+        const fields = ["title", "clientName", "clientEmail", "clientCompany", "status", "validUntil", "notes", "terms", "companyId", "contactId", "currency"];
         for (const f of fields) { if (req.body[f] !== undefined) data[f] = req.body[f]; }
 
         if (req.body.items !== undefined) {
