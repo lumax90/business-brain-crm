@@ -124,7 +124,7 @@ export default function SettingsPage() {
                 const res = await authClient.organization.getFullOrganization({ query: { organizationId: activeOrg.id } });
                 if (res?.data) {
                     setMembers(res.data.members || []);
-                    setInvitations(res.data.invitations || []);
+                    setInvitations((res.data.invitations || []).filter((i: any) => i.status === "pending"));
                 }
             } catch {
                 // silently fail
@@ -166,7 +166,7 @@ export default function SettingsPage() {
             const res = await authClient.organization.getFullOrganization({ query: { organizationId: activeOrg.id } });
             if (res?.data) {
                 setMembers(res.data.members || []);
-                setInvitations(res.data.invitations || []);
+                setInvitations((res.data.invitations || []).filter((i: any) => i.status === "pending"));
             }
         } catch {
             flash("Failed to send invitation.", "error");
@@ -190,8 +190,13 @@ export default function SettingsPage() {
         if (!activeOrg?.id) return;
         try {
             await authClient.organization.cancelInvitation({ invitationId });
-            setInvitations(prev => prev.filter(i => i.id !== invitationId));
             flash("Invitation cancelled.");
+            // Refresh from server to get actual state
+            const res = await authClient.organization.getFullOrganization({ query: { organizationId: activeOrg.id } });
+            if (res?.data) {
+                setMembers(res.data.members || []);
+                setInvitations((res.data.invitations || []).filter((i: any) => i.status === "pending"));
+            }
         } catch {
             flash("Failed to cancel invitation.", "error");
         }

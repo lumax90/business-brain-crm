@@ -5,17 +5,30 @@ import { authClient } from "@/lib/auth-client";
 import { RiMailLine, RiCheckLine, RiCloseLine } from "@remixicon/react";
 import { toast } from "sonner";
 
+const AUTH_BASE =
+    process.env.NEXT_PUBLIC_SCRAPER_URL || "http://localhost:3001";
+
 export function PendingInvitations() {
     const [invitations, setInvitations] = React.useState<any[]>([]);
     const [loading, setLoading] = React.useState(true);
 
     const fetchInvitations = React.useCallback(async () => {
         try {
-            const res = await authClient.organization.listInvitations();
-            if (res?.data) {
-                const pending = (res.data as any[]).filter((inv: any) => inv.status === "pending");
-                setInvitations(pending);
-            }
+            // Better Auth's listUserInvitations is a GET endpoint that returns
+            // invitations addressed to the current user's email.
+            // The client proxy doesn't have the correct pathMethod for this
+            // endpoint, so we call the API directly.
+            const res = await fetch(
+                `${AUTH_BASE}/api/auth/organization/list-user-invitations`,
+                {
+                    method: "GET",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                },
+            );
+            if (!res.ok) throw new Error("Failed to fetch invitations");
+            const data = await res.json();
+            setInvitations(Array.isArray(data) ? data : []);
         } catch {
             // silently fail
         } finally {
