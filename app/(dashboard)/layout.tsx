@@ -38,7 +38,7 @@ export default function DashboardLayout({
     return (
         <div className="flex h-screen overflow-hidden">
             <AppSidebar />
-            <main className="flex-1 ml-[260px] flex flex-col overflow-hidden transition-all duration-300 ease-in-out">
+            <main className="flex-1 ml-[260px] flex flex-col overflow-y-auto transition-all duration-300 ease-in-out">
                 <PendingInvitations />
                 {children}
             </main>

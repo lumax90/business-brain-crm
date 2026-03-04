@@ -89,16 +89,16 @@ interface SearchResult {
 
 // ── Category meta for API results ──
 const TYPE_META: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
-    lead:     { label: "Leads",     icon: RiUserSearchLine,    color: "text-blue-500" },
-    contact:  { label: "Contacts",  icon: RiContactsBook3Line, color: "text-emerald-500" },
-    company:  { label: "Companies", icon: RiBuilding2Line,     color: "text-violet-500" },
-    deal:     { label: "Deals",     icon: RiKanbanView,        color: "text-amber-500" },
-    invoice:  { label: "Invoices",  icon: RiFileList3Line,     color: "text-cyan-500" },
-    proposal: { label: "Proposals", icon: RiPriceTag3Line,     color: "text-pink-500" },
-    project:  { label: "Projects",  icon: RiProjectorLine,     color: "text-orange-500" },
-    campaign: { label: "Campaigns", icon: RiMegaphoneLine,     color: "text-indigo-500" },
-    expense:  { label: "Expenses",  icon: RiWalletLine,        color: "text-red-500" },
-    file:     { label: "Files",     icon: RiFolderOpenLine,    color: "text-stone-500" },
+    lead: { label: "Leads", icon: RiUserSearchLine, color: "text-blue-500" },
+    contact: { label: "Contacts", icon: RiContactsBook3Line, color: "text-emerald-500" },
+    company: { label: "Companies", icon: RiBuilding2Line, color: "text-violet-500" },
+    deal: { label: "Deals", icon: RiKanbanView, color: "text-amber-500" },
+    invoice: { label: "Invoices", icon: RiFileList3Line, color: "text-cyan-500" },
+    proposal: { label: "Proposals", icon: RiPriceTag3Line, color: "text-pink-500" },
+    project: { label: "Projects", icon: RiProjectorLine, color: "text-orange-500" },
+    campaign: { label: "Campaigns", icon: RiMegaphoneLine, color: "text-indigo-500" },
+    expense: { label: "Expenses", icon: RiWalletLine, color: "text-red-500" },
+    file: { label: "Files", icon: RiFolderOpenLine, color: "text-stone-500" },
 };
 
 // ── Static: Pages / Modules ──
@@ -114,38 +114,38 @@ interface StaticItem {
 }
 
 const PAGES: StaticItem[] = [
-    { id: "p-dashboard",   type: "page", title: "Dashboard",       subtitle: "Overview & statistics",              href: "/",            icon: RiDashboardLine,         iconColor: "text-primary",       keywords: ["dashboard", "anasayfa", "genel bakış", "overview", "istatistik"] },
-    { id: "p-engine",      type: "page", title: "Lead Engine",     subtitle: "Discover & generate leads",         href: "/engine",      icon: RiRadarLine,             iconColor: "text-blue-500",      keywords: ["engine", "lead engine", "lead bul", "lead üret", "discover", "generate", "radar"] },
-    { id: "p-leads",       type: "page", title: "Leads",           subtitle: "Manage all leads",                  href: "/leads",       icon: RiUserSearchLine,        iconColor: "text-blue-500",      keywords: ["leads", "lead", "müşteri adayı", "potansiyel", "aday"] },
-    { id: "p-enrichment",  type: "page", title: "Enrichment",      subtitle: "Email discovery & verification",    href: "/mails",       icon: RiMailLine,              iconColor: "text-sky-500",       keywords: ["enrichment", "email", "e-posta", "doğrulama", "verification", "mail"] },
-    { id: "p-campaigns",   type: "page", title: "Campaigns",       subtitle: "Email & outreach campaigns",        href: "/campaigns",   icon: RiMailSendLine,          iconColor: "text-indigo-500",    keywords: ["campaigns", "kampanya", "outreach", "toplu mail", "email kampanyası"] },
-    { id: "p-pipeline",    type: "page", title: "Pipeline",        subtitle: "Sales pipeline & deals",            href: "/pipeline",    icon: RiKanbanView,            iconColor: "text-amber-500",     keywords: ["pipeline", "satış", "deal", "kanban", "fırsat", "anlaşma"] },
-    { id: "p-contacts",    type: "page", title: "Contacts",        subtitle: "People & relationships",            href: "/contacts",    icon: RiContactsBook3Line,     iconColor: "text-emerald-500",   keywords: ["contacts", "kişi", "kişiler", "müşteri", "iletişim", "rehber"] },
-    { id: "p-companies",   type: "page", title: "Companies",       subtitle: "Organizations & clients",           href: "/companies",   icon: RiBuilding2Line,         iconColor: "text-violet-500",    keywords: ["companies", "şirket", "firma", "organizasyon", "kurum", "müşteri firma"] },
-    { id: "p-inbox",       type: "page", title: "Inbox",           subtitle: "Messages & communication",          href: "/inbox",       icon: RiInboxLine,             iconColor: "text-teal-500",      keywords: ["inbox", "gelen kutusu", "mesaj", "communication"] },
-    { id: "p-finance",     type: "page", title: "Finance Overview", subtitle: "Revenue, expenses & reports",      href: "/finance",     icon: RiPieChartLine,          iconColor: "text-green-500",     keywords: ["finance", "finans", "gelir", "gider", "rapor", "mali", "para"] },
-    { id: "p-invoices",    type: "page", title: "Invoices",        subtitle: "Create & track invoices",           href: "/invoices",    icon: RiFileList3Line,         iconColor: "text-cyan-500",      keywords: ["invoices", "fatura", "faturalar", "invoice", "ödeme", "tahsilat"] },
-    { id: "p-expenses",    type: "page", title: "Expenses",        subtitle: "Track business expenses",           href: "/expenses",    icon: RiWalletLine,            iconColor: "text-red-500",       keywords: ["expenses", "gider", "masraf", "harcama", "maliyet"] },
-    { id: "p-proposals",   type: "page", title: "Proposals",       subtitle: "Quotes & proposals",                href: "/proposals",   icon: RiPriceTag3Line,         iconColor: "text-pink-500",      keywords: ["proposals", "teklif", "teklifler", "quote", "fiyat teklifi"] },
-    { id: "p-recurring",   type: "page", title: "Recurring",       subtitle: "Recurring revenue & expenses",      href: "/recurring",   icon: RiLoopLeftLine,          iconColor: "text-purple-500",    keywords: ["recurring", "tekrarlayan", "abonelik", "düzenli gelir", "düzenli gider"] },
-    { id: "p-projects",    type: "page", title: "Projects",        subtitle: "Manage projects & tasks",           href: "/projects",    icon: RiProjectorLine,         iconColor: "text-orange-500",    keywords: ["projects", "proje", "projeler", "görev", "task"] },
-    { id: "p-files",       type: "page", title: "Files",           subtitle: "Documents, uploads & attachments",  href: "/files",       icon: RiFolderOpenLine,        iconColor: "text-stone-500",     keywords: ["files", "dosya", "dosyalar", "belge", "döküman", "ek", "upload", "yükleme"] },
-    { id: "p-automations", type: "page", title: "Automations",     subtitle: "Workflow automations",              href: "/automations", icon: RiFlowChart,             iconColor: "text-lime-500",      keywords: ["automations", "otomasyon", "workflow", "akış", "otomatik"] },
-    { id: "p-settings",    type: "page", title: "Settings",        subtitle: "App configuration",                 href: "/settings",    icon: RiSettings4Line,         iconColor: "text-stone-400",     keywords: ["settings", "ayarlar", "yapılandırma", "config", "tercihler"] },
+    { id: "p-dashboard", type: "page", title: "Dashboard", subtitle: "Overview & statistics", href: "/", icon: RiDashboardLine, iconColor: "text-primary", keywords: ["dashboard", "anasayfa", "genel bakış", "overview", "istatistik"] },
+    { id: "p-engine", type: "page", title: "Lead Engine", subtitle: "Discover & generate leads", href: "/engine", icon: RiRadarLine, iconColor: "text-blue-500", keywords: ["engine", "lead engine", "lead bul", "lead üret", "discover", "generate", "radar"] },
+    { id: "p-leads", type: "page", title: "Leads", subtitle: "Manage all leads", href: "/leads", icon: RiUserSearchLine, iconColor: "text-blue-500", keywords: ["leads", "lead", "müşteri adayı", "potansiyel", "aday"] },
+    { id: "p-enrichment", type: "page", title: "Enrichment", subtitle: "Email discovery & verification", href: "/mails", icon: RiMailLine, iconColor: "text-sky-500", keywords: ["enrichment", "email", "e-posta", "doğrulama", "verification", "mail"] },
+    { id: "p-campaigns", type: "page", title: "Campaigns", subtitle: "Email & outreach campaigns", href: "/campaigns", icon: RiMailSendLine, iconColor: "text-indigo-500", keywords: ["campaigns", "kampanya", "outreach", "toplu mail", "email kampanyası"] },
+    { id: "p-pipeline", type: "page", title: "Pipeline", subtitle: "Sales pipeline & deals", href: "/pipeline", icon: RiKanbanView, iconColor: "text-amber-500", keywords: ["pipeline", "satış", "deal", "kanban", "fırsat", "anlaşma"] },
+    { id: "p-contacts", type: "page", title: "Contacts", subtitle: "People & relationships", href: "/contacts", icon: RiContactsBook3Line, iconColor: "text-emerald-500", keywords: ["contacts", "kişi", "kişiler", "müşteri", "iletişim", "rehber"] },
+    { id: "p-companies", type: "page", title: "Companies", subtitle: "Organizations & clients", href: "/companies", icon: RiBuilding2Line, iconColor: "text-violet-500", keywords: ["companies", "şirket", "firma", "organizasyon", "kurum", "müşteri firma"] },
+    { id: "p-inbox", type: "page", title: "Inbox", subtitle: "Messages & communication", href: "/inbox", icon: RiInboxLine, iconColor: "text-teal-500", keywords: ["inbox", "gelen kutusu", "mesaj", "communication"] },
+    { id: "p-finance", type: "page", title: "Finance Overview", subtitle: "Revenue, expenses & reports", href: "/finance", icon: RiPieChartLine, iconColor: "text-green-500", keywords: ["finance", "finans", "gelir", "gider", "rapor", "mali", "para"] },
+    { id: "p-invoices", type: "page", title: "Invoices", subtitle: "Create & track invoices", href: "/invoices", icon: RiFileList3Line, iconColor: "text-cyan-500", keywords: ["invoices", "fatura", "faturalar", "invoice", "ödeme", "tahsilat"] },
+    { id: "p-expenses", type: "page", title: "Expenses", subtitle: "Track business expenses", href: "/expenses", icon: RiWalletLine, iconColor: "text-red-500", keywords: ["expenses", "gider", "masraf", "harcama", "maliyet"] },
+    { id: "p-proposals", type: "page", title: "Proposals", subtitle: "Quotes & proposals", href: "/proposals", icon: RiPriceTag3Line, iconColor: "text-pink-500", keywords: ["proposals", "teklif", "teklifler", "quote", "fiyat teklifi"] },
+    { id: "p-recurring", type: "page", title: "Recurring", subtitle: "Recurring revenue & expenses", href: "/recurring", icon: RiLoopLeftLine, iconColor: "text-purple-500", keywords: ["recurring", "tekrarlayan", "abonelik", "düzenli gelir", "düzenli gider"] },
+    { id: "p-projects", type: "page", title: "Projects", subtitle: "Manage projects & tasks", href: "/projects", icon: RiProjectorLine, iconColor: "text-orange-500", keywords: ["projects", "proje", "projeler", "görev", "task"] },
+    { id: "p-files", type: "page", title: "Files", subtitle: "Documents, uploads & attachments", href: "/files", icon: RiFolderOpenLine, iconColor: "text-stone-500", keywords: ["files", "dosya", "dosyalar", "belge", "döküman", "ek", "upload", "yükleme"] },
+    { id: "p-automations", type: "page", title: "Automations", subtitle: "Workflow automations", href: "/automations", icon: RiFlowChart, iconColor: "text-lime-500", keywords: ["automations", "otomasyon", "workflow", "akış", "otomatik"] },
+    { id: "p-settings", type: "page", title: "Settings", subtitle: "App configuration", href: "/settings", icon: RiSettings4Line, iconColor: "text-stone-400", keywords: ["settings", "ayarlar", "yapılandırma", "config", "tercihler"] },
 ];
 
 // ── Static: Quick Actions ──
 const ACTIONS: StaticItem[] = [
-    { id: "a-new-lead",       type: "action", title: "New Lead",        subtitle: "Add a new lead to the system",    href: "/leads",     icon: RiAddLine,            iconColor: "text-blue-500",    keywords: ["new lead", "yeni lead", "lead ekle", "lead oluştur", "add lead"] },
-    { id: "a-new-contact",    type: "action", title: "New Contact",     subtitle: "Create a new contact",            href: "/contacts",  icon: RiAddLine,            iconColor: "text-emerald-500", keywords: ["new contact", "yeni kişi", "kişi ekle", "contact oluştur"] },
-    { id: "a-new-company",    type: "action", title: "New Company",     subtitle: "Add a new company",               href: "/companies", icon: RiAddLine,            iconColor: "text-violet-500",  keywords: ["new company", "yeni şirket", "firma ekle", "şirket oluştur"] },
-    { id: "a-new-invoice",    type: "action", title: "New Invoice",     subtitle: "Create a new invoice",            href: "/invoices",  icon: RiAddLine,            iconColor: "text-cyan-500",    keywords: ["new invoice", "yeni fatura", "fatura oluştur", "fatura ekle"] },
-    { id: "a-new-proposal",   type: "action", title: "New Proposal",    subtitle: "Create a new proposal",           href: "/proposals", icon: RiAddLine,            iconColor: "text-pink-500",    keywords: ["new proposal", "yeni teklif", "teklif oluştur", "teklif ekle"] },
-    { id: "a-new-project",    type: "action", title: "New Project",     subtitle: "Start a new project",             href: "/projects",  icon: RiAddLine,            iconColor: "text-orange-500",  keywords: ["new project", "yeni proje", "proje oluştur", "proje ekle"] },
-    { id: "a-new-campaign",   type: "action", title: "New Campaign",    subtitle: "Launch a new campaign",           href: "/campaigns", icon: RiAddLine,            iconColor: "text-indigo-500",  keywords: ["new campaign", "yeni kampanya", "kampanya oluştur"] },
-    { id: "a-new-expense",    type: "action", title: "New Expense",     subtitle: "Record a new expense",            href: "/expenses",  icon: RiAddLine,            iconColor: "text-red-500",     keywords: ["new expense", "yeni gider", "masraf ekle", "harcama ekle"] },
-    { id: "a-upload-file",    type: "action", title: "Upload File",     subtitle: "Upload documents or images",      href: "/files",     icon: RiUploadCloud2Line,   iconColor: "text-stone-500",   keywords: ["upload", "dosya yükle", "yükle", "belge yükle"] },
-    { id: "a-find-leads",     type: "action", title: "Find Leads",      subtitle: "Search for new leads with engine", href: "/engine",   icon: RiRadarLine,          iconColor: "text-blue-500",    keywords: ["find leads", "lead bul", "lead ara", "arama", "keşfet"] },
+    { id: "a-new-lead", type: "action", title: "New Lead", subtitle: "Add a new lead to the system", href: "/leads", icon: RiAddLine, iconColor: "text-blue-500", keywords: ["new lead", "yeni lead", "lead ekle", "lead oluştur", "add lead"] },
+    { id: "a-new-contact", type: "action", title: "New Contact", subtitle: "Create a new contact", href: "/contacts", icon: RiAddLine, iconColor: "text-emerald-500", keywords: ["new contact", "yeni kişi", "kişi ekle", "contact oluştur"] },
+    { id: "a-new-company", type: "action", title: "New Company", subtitle: "Add a new company", href: "/companies", icon: RiAddLine, iconColor: "text-violet-500", keywords: ["new company", "yeni şirket", "firma ekle", "şirket oluştur"] },
+    { id: "a-new-invoice", type: "action", title: "New Invoice", subtitle: "Create a new invoice", href: "/invoices", icon: RiAddLine, iconColor: "text-cyan-500", keywords: ["new invoice", "yeni fatura", "fatura oluştur", "fatura ekle"] },
+    { id: "a-new-proposal", type: "action", title: "New Proposal", subtitle: "Create a new proposal", href: "/proposals", icon: RiAddLine, iconColor: "text-pink-500", keywords: ["new proposal", "yeni teklif", "teklif oluştur", "teklif ekle"] },
+    { id: "a-new-project", type: "action", title: "New Project", subtitle: "Start a new project", href: "/projects", icon: RiAddLine, iconColor: "text-orange-500", keywords: ["new project", "yeni proje", "proje oluştur", "proje ekle"] },
+    { id: "a-new-campaign", type: "action", title: "New Campaign", subtitle: "Launch a new campaign", href: "/campaigns", icon: RiAddLine, iconColor: "text-indigo-500", keywords: ["new campaign", "yeni kampanya", "kampanya oluştur"] },
+    { id: "a-new-expense", type: "action", title: "New Expense", subtitle: "Record a new expense", href: "/expenses", icon: RiAddLine, iconColor: "text-red-500", keywords: ["new expense", "yeni gider", "masraf ekle", "harcama ekle"] },
+    { id: "a-upload-file", type: "action", title: "Upload File", subtitle: "Upload documents or images", href: "/files", icon: RiUploadCloud2Line, iconColor: "text-stone-500", keywords: ["upload", "dosya yükle", "yükle", "belge yükle"] },
+    { id: "a-find-leads", type: "action", title: "Find Leads", subtitle: "Search for new leads with engine", href: "/engine", icon: RiRadarLine, iconColor: "text-blue-500", keywords: ["find leads", "lead bul", "lead ara", "arama", "keşfet"] },
 ];
 
 // ── Local fuzzy match ──
@@ -169,7 +169,7 @@ function useDebounce<T>(value: T, delay: number): T {
 // ── Props ──
 interface AppHeaderProps {
     title: string;
-    subtitle?: string;
+    subtitle?: React.ReactNode;
 }
 
 export function AppHeader({ title, subtitle }: AppHeaderProps) {
@@ -234,18 +234,18 @@ export function AppHeader({ title, subtitle }: AppHeaderProps) {
         setNotifications((prev) =>
             prev.map((n) => (n.id === id ? { ...n, read: true } : n))
         );
-        apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
+        apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }).catch(() => { });
     };
 
     const markAllAsRead = async () => {
         setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-        apiFetch("/api/notifications/read-all", { method: "PATCH" }).catch(() => {});
+        apiFetch("/api/notifications/read-all", { method: "PATCH" }).catch(() => { });
         toast.success("All notifications marked as read");
     };
 
     const dismissNotification = async (id: string) => {
         setNotifications((prev) => prev.filter((n) => n.id !== id));
-        apiFetch(`/api/notifications/${id}`, { method: "DELETE" }).catch(() => {});
+        apiFetch(`/api/notifications/${id}`, { method: "DELETE" }).catch(() => { });
     };
 
     // ⌘K shortcut
@@ -744,7 +744,7 @@ export function AppHeader({ title, subtitle }: AppHeaderProps) {
                                     <button
                                         onClick={() => {
                                             setNotifications([]);
-                                            apiFetch("/api/notifications", { method: "DELETE" }).catch(() => {});
+                                            apiFetch("/api/notifications", { method: "DELETE" }).catch(() => { });
                                             toast.info("All notifications cleared");
                                         }}
                                         className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"

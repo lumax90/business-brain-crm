@@ -167,6 +167,8 @@ leadsRouter.get("/stats", async (req: Request, res: Response) => {
     }
 });
 
+
+
 // ─── GET /api/leads/:id — Single lead ───
 leadsRouter.get("/:id", async (req: Request, res: Response) => {
     try {
@@ -200,7 +202,7 @@ leadsRouter.post("/", async (req: Request, res: Response) => {
         createNotification(req.userId!, req.organizationId || null, {
             type: "success", title: "Lead created", message: `New lead "${data.name || data.email}" added.`,
             href: "/leads", entity: "lead", entityId: lead.id,
-        }).catch(() => {});
+        }).catch(() => { });
 
         res.json({
             success: true,
@@ -295,7 +297,7 @@ leadsRouter.post("/import", async (req: Request, res: Response) => {
         createNotification(req.userId!, req.organizationId || null, {
             type: "success", title: "Import complete", message: `${imported} leads imported successfully.`,
             href: "/leads", entity: "lead",
-        }).catch(() => {});
+        }).catch(() => { });
 
         res.json({
             success: true,
@@ -344,7 +346,7 @@ leadsRouter.delete("/:id", async (req: Request, res: Response) => {
         createNotification(req.userId!, req.organizationId || null, {
             type: "info", title: "Lead deleted", message: "A lead was removed.",
             href: "/leads", entity: "lead",
-        }).catch(() => {});
+        }).catch(() => { });
 
         res.json({ success: true });
     } catch (error: unknown) {
@@ -411,17 +413,7 @@ leadsRouter.post("/bulk-status", async (req: Request, res: Response) => {
     }
 });
 
-// ─── DELETE /api/leads — Delete ALL ───
-leadsRouter.delete("/", async (req: Request, res: Response) => {
-    try {
-        const result = await prisma.lead.deleteMany({ where: { ...tenantFilter(req) } });
-        res.json({ success: true, deleted: result.count });
-    } catch (error: unknown) {
-        console.error("Delete all error:", error);
-        const message = error instanceof Error ? error.message : "Unknown error";
-        res.status(500).json({ error: message });
-    }
-});
+
 
 // ─── Helper: Build lead data from request body ───
 function buildLeadData(body: Record<string, any>) {
@@ -441,6 +433,8 @@ function buildLeadData(body: Record<string, any>) {
             } else {
                 data[key] = value;
             }
+        } else if (key === "listId") {
+            data.listId = value || null;
         } else if (key !== "id" && key !== "createdAt" && key !== "updatedAt") {
             customFields[key] = value;
         }

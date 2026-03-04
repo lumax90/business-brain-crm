@@ -53,15 +53,16 @@ const stageOrder: DealStage[] = ["new", "qualified", "proposal", "negotiation", 
 import { API, apiFetch } from "@/lib/api";
 import { toast } from "sonner";
 
-function formatCurrency(val: number) {
+function formatCurrency(val: number, currency: string = "USD") {
     return new Intl.NumberFormat("en-US", {
         style: "currency",
-        currency: "USD",
+        currency,
         maximumFractionDigits: 0,
     }).format(val);
 }
 
 export default function PipelinePage() {
+    const [settings, setSettings] = React.useState<Record<string, string>>({});
     const [deals, setDeals] = React.useState<Deal[]>([]);
     const [crmContacts, setCrmContacts] = React.useState<CrmContact[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -75,6 +76,7 @@ export default function PipelinePage() {
     const [selectedContactId, setSelectedContactId] = React.useState("");
     const [newTitle, setNewTitle] = React.useState("");
     const [newValue, setNewValue] = React.useState("");
+    const [newCurrency, setNewCurrency] = React.useState("USD");
     const [newContact, setNewContact] = React.useState("");
     const [newCompany, setNewCompany] = React.useState("");
     const [newProbability, setNewProbability] = React.useState("25");
@@ -82,10 +84,13 @@ export default function PipelinePage() {
 
     const fetchDeals = async () => {
         try {
-            const [dRes, cRes] = await Promise.all([
+            const [setRes, dRes, cRes] = await Promise.all([
+                apiFetch(`${API}/api/settings`).then((r) => r.json()).catch(() => ({ settings: {} })),
                 apiFetch(`${API}/api/deals`).then((r) => r.json()),
                 apiFetch(`${API}/api/contacts`).then((r) => r.json()),
             ]);
+            setSettings(setRes.settings || {});
+            setNewCurrency(setRes.settings?.PRIMARY_CURRENCY || "USD");
             if (dRes.success) setDeals(dRes.deals);
             if (cRes.success) setCrmContacts(cRes.contacts);
         } catch (err) {
@@ -96,6 +101,17 @@ export default function PipelinePage() {
     };
 
     React.useEffect(() => { fetchDeals(); }, []);
+
+    const primaryCurrency = settings["PRIMARY_CURRENCY"] || "USD";
+    const secondaryCurrency = settings["SECONDARY_CURRENCY"] && settings["SECONDARY_CURRENCY"] !== "None" ? settings["SECONDARY_CURRENCY"] : null;
+
+    const sumByCurrency = (items: any[], filterFn: (item: any) => boolean, valueField: string) => {
+        return items.filter(filterFn).reduce((acc: Record<string, number>, item: any) => {
+            const cur = item.currency || "USD";
+            acc[cur] = (acc[cur] || 0) + (item[valueField] || 0);
+            return acc;
+        }, {});
+    };
 
     const handleContactSelect = (contactId: string) => {
         setSelectedContactId(contactId);
@@ -155,6 +171,7 @@ export default function PipelinePage() {
                 body: JSON.stringify({
                     title: newTitle.trim(),
                     value: parseFloat(newValue) || 0,
+                    currency: newCurrency,
                     stage: addToStage,
                     contactName: newContact.trim() || null,
                     company: newCompany.trim() || null,
@@ -194,6 +211,7 @@ export default function PipelinePage() {
         setSelectedContactId("");
         setNewTitle("");
         setNewValue("");
+        setNewCurrency(primaryCurrency);
         setNewContact("");
         setNewCompany("");
         setNewProbability("25");
@@ -206,9 +224,7 @@ export default function PipelinePage() {
         setShowAddModal(true);
     };
 
-    const totalPipeline = deals
-        .filter((d) => !["closed_won", "closed_lost"].includes(d.stage))
-        .reduce((sum, d) => sum + d.value, 0);
+    const totalPipelineVals = sumByCurrency(deals, (d) => !["closed_won", "closed_lost"].includes(d.stage), "value");
 
     if (loading) {
         return (
@@ -221,21 +237,41 @@ export default function PipelinePage() {
         );
     }
 
+    // Render helper for Dual Currency
+    const DualCurrency = ({ vals, isNet = false, inline = false }: { vals: Record<string, number>, isNet?: boolean, inline?: boolean }) => {
+        const pVal = vals[primaryCurrency] || 0;
+        const sVal = secondaryCurrency ? (vals[secondaryCurrency] || 0) : null;
+
+        return (
+            <div className={cn("flex", inline ? "flex-row items-baseline gap-1.5" : "flex-col")}>
+                <span className={isNet && pVal < 0 ? "text-rose-600 dark:text-rose-400" : ""}>{formatCurrency(pVal, primaryCurrency)}</span>
+                {secondaryCurrency && (
+                    <span className={cn(
+                        inline ? "text-[10px]" : "text-xs mt-0.5",
+                        isNet && sVal! < 0 ? "text-rose-500/80" : "text-muted-foreground font-medium"
+                    )}>
+                        {inline ? "(" : ""}{formatCurrency(sVal || 0, secondaryCurrency)}{inline ? ")" : ""}
+                    </span>
+                )}
+            </div>
+        );
+    };
+
     return (
         <>
-            <AppHeader title="Pipeline" subtitle={`${formatCurrency(totalPipeline)} in pipeline · ${deals.length} deals`} />
+            <AppHeader title="Pipeline" subtitle={<div className="flex items-center gap-1.5"><DualCurrency vals={totalPipelineVals} inline /> in pipeline · {deals.length} deals</div>} />
             <div className="p-6">
                 {/* Pipeline Totals Bar */}
                 <div className="flex items-center gap-4 mb-6 overflow-x-auto pb-2">
                     {stageOrder.map((stage) => {
                         const stageDeals = deals.filter((d) => d.stage === stage);
-                        const total = stageDeals.reduce((sum, d) => sum + d.value, 0);
+                        const stageVals = sumByCurrency(stageDeals, () => true, "value");
                         return (
                             <div key={stage} className="flex items-center gap-2 shrink-0">
                                 <div className={cn("w-2 h-2 rounded-full", stageConfig[stage].bgColor)} />
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
                                     {stageConfig[stage].label}:{" "}
-                                    <span className="font-semibold text-foreground">{formatCurrency(total)}</span>
+                                    <span className="font-semibold text-foreground"><DualCurrency vals={stageVals} inline /></span>
                                     <span className="text-muted-foreground/60"> ({stageDeals.length})</span>
                                 </span>
                             </div>
@@ -247,7 +283,7 @@ export default function PipelinePage() {
                 <div className="flex gap-4 overflow-x-auto pb-4">
                     {stageOrder.map((stage) => {
                         const stageDeals = deals.filter((d) => d.stage === stage);
-                        const stageTotal = stageDeals.reduce((sum, d) => sum + d.value, 0);
+                        const stageVals = sumByCurrency(stageDeals, () => true, "value");
                         const isDragOver = dragOverStage === stage;
 
                         return (
@@ -272,8 +308,8 @@ export default function PipelinePage() {
                                             {stageDeals.length}
                                         </span>
                                     </div>
-                                    <span className="text-[10px] font-semibold text-muted-foreground">
-                                        {formatCurrency(stageTotal)}
+                                    <span className="text-[10px] font-semibold text-muted-foreground flex flex-col text-right">
+                                        <DualCurrency vals={stageVals} />
                                     </span>
                                 </div>
 
@@ -315,7 +351,7 @@ export default function PipelinePage() {
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-1 text-foreground">
                                                     <RiMoneyDollarCircleLine className="w-3.5 h-3.5 text-primary" />
-                                                    <span className="text-xs font-bold">{formatCurrency(deal.value)}</span>
+                                                    <span className="text-xs font-bold">{formatCurrency(deal.value, deal.currency)}</span>
                                                 </div>
                                                 {deal.probability > 0 && (
                                                     <span className="text-[10px] text-muted-foreground">{deal.probability}%</span>
@@ -389,14 +425,24 @@ export default function PipelinePage() {
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
-                                    <label className="text-xs font-medium text-foreground">Value ($)</label>
-                                    <input
-                                        type="number"
-                                        placeholder="0"
-                                        value={newValue}
-                                        onChange={(e) => setNewValue(e.target.value)}
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
-                                    />
+                                    <label className="text-xs font-medium text-foreground">Value</label>
+                                    <div className="flex items-center gap-2">
+                                        <select
+                                            value={newCurrency}
+                                            onChange={(e) => setNewCurrency(e.target.value)}
+                                            className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary/40 shrink-0"
+                                        >
+                                            <option value={primaryCurrency}>{primaryCurrency}</option>
+                                            {secondaryCurrency && <option value={secondaryCurrency}>{secondaryCurrency}</option>}
+                                        </select>
+                                        <input
+                                            type="number"
+                                            placeholder="0"
+                                            value={newValue}
+                                            onChange={(e) => setNewValue(e.target.value)}
+                                            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary/40"
+                                        />
+                                    </div>
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-foreground">Probability (%)</label>

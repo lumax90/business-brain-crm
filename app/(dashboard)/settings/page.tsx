@@ -114,6 +114,9 @@ export default function SettingsPage() {
     const [members, setMembers] = React.useState<any[]>([]);
     const [invitations, setInvitations] = React.useState<any[]>([]);
     const [loadingMembers, setLoadingMembers] = React.useState(false);
+    const [showDeleteOrgModal, setShowDeleteOrgModal] = React.useState(false);
+    const [deleteOrgConfirmText, setDeleteOrgConfirmText] = React.useState("");
+    const [deletingOrg, setDeletingOrg] = React.useState(false);
 
     // Fetch members when org changes
     React.useEffect(() => {
@@ -134,6 +137,21 @@ export default function SettingsPage() {
         };
         fetchMembers();
     }, [activeOrg?.id]);
+
+    const handleDeleteOrg = async () => {
+        if (!activeOrg?.id || deleteOrgConfirmText !== activeOrg.name) return;
+        try {
+            setDeletingOrg(true);
+            await authClient.organization.delete({ organizationId: activeOrg.id });
+            flash("Organization deleted successfully.");
+            setShowDeleteOrgModal(false);
+            setDeleteOrgConfirmText("");
+        } catch {
+            flash("Failed to delete organization.", "error");
+        } finally {
+            setDeletingOrg(false);
+        }
+    };
 
     const handleCreateOrg = async () => {
         if (!newOrgName.trim()) return;
@@ -557,6 +575,32 @@ export default function SettingsPage() {
                                                 </button>
                                             </SectionCard>
                                         )}
+
+                                        {/* Danger Zone */}
+                                        {members.find(m => m.userId === session?.user?.id)?.role === "owner" && (
+                                            <div className="pt-4 mt-8 border-t border-border">
+                                                <h4 className="text-sm font-semibold text-red-500 mb-1">Danger Zone</h4>
+                                                <p className="text-xs text-muted-foreground mb-4">
+                                                    Irreversible and destructive actions. Proceed with caution.
+                                                </p>
+                                                <SectionCard className="border-red-500/20 bg-red-500/5">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <h5 className="text-sm font-medium text-foreground">Delete Organization</h5>
+                                                            <p className="text-xs text-muted-foreground max-w-[280px] sm:max-w-md mt-1">
+                                                                Permanently delete this organization, along with all its leads, deals, invoices, and data. This action cannot be undone.
+                                                            </p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setShowDeleteOrgModal(true)}
+                                                            className="flex h-9 shrink-0 items-center justify-center rounded-md bg-red-500/10 px-4 text-sm font-medium text-red-600 hover:bg-red-500/20 transition-colors"
+                                                        >
+                                                            Delete Organization
+                                                        </button>
+                                                    </div>
+                                                </SectionCard>
+                                            </div>
+                                        )}
                                     </>
                                 )}
                             </div>
@@ -641,41 +685,70 @@ export default function SettingsPage() {
                                         <label className="text-xs font-medium text-foreground">Workspace Name</label>
                                         <input
                                             type="text"
-                                            defaultValue="Pixl Sales Brain"
+                                            value={settings["WORKSPACE_NAME"] || "Pixl Sales Brain"}
+                                            onChange={(e) => updateSetting("WORKSPACE_NAME", e.target.value)}
                                             className={inputCls}
                                         />
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-1.5">
                                             <label className="text-xs font-medium text-foreground">Timezone</label>
-                                            <select className={inputCls}>
-                                                <option>Europe/Istanbul (UTC+3)</option>
-                                                <option>America/New_York (UTC-5)</option>
-                                                <option>Europe/London (UTC+0)</option>
+                                            <select
+                                                className={inputCls}
+                                                value={settings["TIMEZONE"] || "Europe/Istanbul (UTC+3)"}
+                                                onChange={(e) => updateSetting("TIMEZONE", e.target.value)}
+                                            >
+                                                <option value="Europe/Istanbul (UTC+3)">Europe/Istanbul (UTC+3)</option>
+                                                <option value="America/New_York (UTC-5)">America/New_York (UTC-5)</option>
+                                                <option value="Europe/London (UTC+0)">Europe/London (UTC+0)</option>
                                             </select>
                                         </div>
                                         <div className="space-y-1.5">
-                                            <label className="text-xs font-medium text-foreground">Currency</label>
-                                            <select className={inputCls}>
-                                                <option>USD ($)</option>
-                                                <option>EUR (€)</option>
-                                                <option>TRY (₺)</option>
-                                                <option>GBP (£)</option>
+                                            <label className="text-xs font-medium text-foreground">Primary Currency</label>
+                                            <select
+                                                className={inputCls}
+                                                value={settings["PRIMARY_CURRENCY"] || "USD"}
+                                                onChange={(e) => updateSetting("PRIMARY_CURRENCY", e.target.value)}
+                                            >
+                                                <option value="USD">USD ($)</option>
+                                                <option value="EUR">EUR (€)</option>
+                                                <option value="TRY">TRY (₺)</option>
+                                                <option value="GBP">GBP (£)</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-medium text-foreground">Secondary Currency</label>
+                                            <select
+                                                className={inputCls}
+                                                value={settings["SECONDARY_CURRENCY"] || "None"}
+                                                onChange={(e) => updateSetting("SECONDARY_CURRENCY", e.target.value)}
+                                            >
+                                                <option value="None">None</option>
+                                                <option value="USD">USD ($)</option>
+                                                <option value="EUR">EUR (€)</option>
+                                                <option value="TRY">TRY (₺)</option>
+                                                <option value="GBP">GBP (£)</option>
                                             </select>
                                         </div>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-medium text-foreground">Date Format</label>
-                                        <select className={inputCls}>
-                                            <option>MM/DD/YYYY</option>
-                                            <option>DD/MM/YYYY</option>
-                                            <option>YYYY-MM-DD</option>
-                                        </select>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-medium text-foreground">Date Format</label>
+                                            <select className={inputCls}>
+                                                <option>MM/DD/YYYY</option>
+                                                <option>DD/MM/YYYY</option>
+                                                <option>YYYY-MM-DD</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 </SectionCard>
 
-                                <button className="flex items-center gap-2 h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-                                    <RiSaveLine className="w-4 h-4" />
+                                <button
+                                    onClick={() => handleSave(["WORKSPACE_NAME", "TIMEZONE", "PRIMARY_CURRENCY", "SECONDARY_CURRENCY", "DATE_FORMAT"])}
+                                    disabled={saving || loading}
+                                    className="flex items-center gap-2 h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                                >
+                                    {saving ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : <RiSaveLine className="w-4 h-4" />}
                                     Save Changes
                                 </button>
                             </div>
@@ -922,6 +995,49 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </div>
+
+            {/* DELETE ORG MODAL */}
+            {showDeleteOrgModal && activeOrg && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+                    <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl animate-in zoom-in-95">
+                        <div className="mb-4 flex items-center gap-3 text-red-500">
+                            <RiDeleteBinLine className="h-6 w-6" />
+                            <h2 className="text-lg font-bold">Delete Organization</h2>
+                        </div>
+                        <p className="mb-4 text-sm text-muted-foreground">
+                            You are about to permanently delete the organization <strong className="text-foreground">{activeOrg.name}</strong> and all of its associated data (leads, deals, invoices, expenses). This action cannot be reversed.
+                        </p>
+                        <div className="mb-6 space-y-2">
+                            <label className="text-sm font-medium text-foreground">
+                                Type <strong className="select-all block mt-1 p-2 bg-muted/50 rounded border">{activeOrg.name}</strong> to confirm:
+                            </label>
+                            <input
+                                type="text"
+                                value={deleteOrgConfirmText}
+                                onChange={(e) => setDeleteOrgConfirmText(e.target.value)}
+                                className={inputCls}
+                                placeholder="Organization name"
+                            />
+                        </div>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => { setShowDeleteOrgModal(false); setDeleteOrgConfirmText(""); }}
+                                disabled={deletingOrg}
+                                className="h-9 px-4 rounded-md text-sm font-medium border border-input bg-background hover:bg-muted/50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteOrg}
+                                disabled={deletingOrg || deleteOrgConfirmText !== activeOrg.name}
+                                className="flex items-center gap-2 h-9 px-4 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                            >
+                                {deletingOrg ? <RiLoader4Line className="w-4 h-4 animate-spin" /> : "Delete Organization"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

@@ -240,20 +240,13 @@ export default function LeadsPage() {
     // ─── List Delete Confirmation ───
     const [deleteListTarget, setDeleteListTarget] = React.useState<LeadList | null>(null);
 
-    // ─── Delete All State ───
-    const [showDeleteAll, setShowDeleteAll] = React.useState(false);
-    const [deleteConfirmText, setDeleteConfirmText] = React.useState("");
-    const [deleting, setDeleting] = React.useState(false);
-
     // ─── Fetch Lists ───
     const fetchLists = React.useCallback(async () => {
         try {
             const res = await apiFetch(`${API}/api/lists`);
             const data = await res.json();
             if (data.success) setLists(data.lists);
-        } catch (err) {
-            console.error("Fetch lists error:", err);
-        }
+        } catch (err) { console.error(err); }
     }, []);
 
     React.useEffect(() => { fetchLists(); }, [fetchLists]);
@@ -381,27 +374,15 @@ export default function LeadsPage() {
         } catch (err) { console.error(err); toast.error("Failed to create list"); }
     };
 
-    const confirmDeleteList = async (deleteLeads: boolean) => {
+    const confirmDeleteList = async () => {
         if (!deleteListTarget) return;
         try {
-            if (deleteLeads) {
-                // First delete all leads in this list, then delete the list
-                const res = await apiFetch(`${API}/api/leads?listId=${deleteListTarget.id}&limit=10000`);
-                const data = await res.json();
-                if (data.success && data.leads.length > 0) {
-                    const ids = data.leads.map((l: any) => l.id);
-                    await apiFetch(`${API}/api/leads/bulk-delete`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ ids }),
-                    });
-                }
-            }
             await apiFetch(`${API}/api/lists/${deleteListTarget.id}`, { method: "DELETE" });
             if (activeList === deleteListTarget.id) setActiveList("all");
             setDeleteListTarget(null);
             fetchLists();
             fetchLeads();
-            toast.success(`List deleted${deleteLeads ? " with all leads" : ""}`);
+            toast.success("List deleted");
         } catch (err) { console.error(err); toast.error("Failed to delete list"); }
     };
 
@@ -489,21 +470,7 @@ export default function LeadsPage() {
         toast.success(`Exported ${toExport.length} leads`);
     };
 
-    // ─── Delete All ───
-    const handleDeleteAll = async () => {
-        if (deleteConfirmText !== "DELETE") return;
-        setDeleting(true);
-        try {
-            await apiFetch(`${API}/api/leads`, { method: "DELETE" });
-            setShowDeleteAll(false);
-            setDeleteConfirmText("");
-            clearSelection();
-            fetchLeads();
-            fetchLists();
-            toast.success("All leads deleted");
-        } catch (err) { console.error(err); toast.error("Failed to delete all leads"); }
-        finally { setDeleting(false); }
-    };
+
 
     // ─── File Upload ───
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -760,12 +727,7 @@ export default function LeadsPage() {
                                 <RiUpload2Line className="w-3.5 h-3.5" />
                                 Import
                             </button>
-                            {total > 0 && (
-                                <button onClick={() => setShowDeleteAll(true)} className="flex items-center gap-1 h-8 px-2.5 rounded-md border border-destructive/30 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors">
-                                    <RiDeleteBinLine className="w-3.5 h-3.5" />
-                                    Delete All
-                                </button>
-                            )}
+
                         </div>
                     </div>
 
@@ -1129,20 +1091,16 @@ export default function LeadsPage() {
                             </div>
                             <h3 className="text-sm font-semibold text-foreground mb-1">Delete &quot;{deleteListTarget.name}&quot;?</h3>
                             <p className="text-xs text-muted-foreground mb-5">
-                                This list contains {deleteListTarget.leadCount} leads. What would you like to do?
+                                Are you sure you want to delete this list? The leads inside will not be deleted.
                             </p>
-                            <div className="space-y-2">
-                                <button onClick={() => confirmDeleteList(false)}
-                                    className="w-full h-9 rounded-md border border-input text-xs font-medium hover:bg-muted transition-colors">
-                                    Delete list only — keep leads in &quot;All Leads&quot;
-                                </button>
-                                <button onClick={() => confirmDeleteList(true)}
-                                    className="w-full h-9 rounded-md border border-destructive/30 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors">
-                                    Delete list + all {deleteListTarget.leadCount} leads inside
-                                </button>
+                            <div className="space-y-2 flex gap-2">
                                 <button onClick={() => setDeleteListTarget(null)}
-                                    className="w-full h-9 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+                                    className="flex-1 h-9 rounded-md border border-input text-xs font-medium hover:bg-muted transition-colors">
                                     Cancel
+                                </button>
+                                <button onClick={() => confirmDeleteList()}
+                                    className="flex-1 h-9 rounded-md border border-destructive/30 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors">
+                                    Delete List
                                 </button>
                             </div>
                         </div>
@@ -1150,44 +1108,6 @@ export default function LeadsPage() {
                 </div>
             )}
 
-            {/* ─── Delete All Confirmation ─── */}
-            {showDeleteAll && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
-                    <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-fade-in-scale">
-                        <div className="p-6 text-center">
-                            <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-3">
-                                <RiErrorWarningLine className="w-6 h-6 text-destructive" />
-                            </div>
-                            <h3 className="text-sm font-semibold text-foreground mb-1">Delete All Leads?</h3>
-                            <p className="text-xs text-muted-foreground mb-4">
-                                This will permanently delete <strong>{total.toLocaleString()}</strong> leads. This action cannot be undone.
-                            </p>
-                            <p className="text-xs text-muted-foreground mb-2">
-                                Type <strong className="text-destructive">DELETE</strong> to confirm:
-                            </p>
-                            <input
-                                value={deleteConfirmText}
-                                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                                placeholder="Type DELETE here"
-                                autoFocus
-                                className="h-9 w-full rounded-md border border-destructive/30 bg-background px-3 text-sm text-center placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-destructive/30 mb-4"
-                            />
-                            <div className="flex gap-2">
-                                <button onClick={() => { setShowDeleteAll(false); setDeleteConfirmText(""); }}
-                                    className="flex-1 h-9 rounded-md border border-input text-xs font-medium hover:bg-muted transition-colors">
-                                    Cancel
-                                </button>
-                                <button onClick={handleDeleteAll}
-                                    disabled={deleteConfirmText !== "DELETE" || deleting}
-                                    className={cn("flex-1 h-9 rounded-md text-xs font-medium transition-colors",
-                                        deleteConfirmText === "DELETE" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : "bg-muted text-muted-foreground cursor-not-allowed")}>
-                                    {deleting ? "Deleting..." : `Delete ${total.toLocaleString()} Leads`}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
