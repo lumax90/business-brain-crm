@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pixl-sales-brain-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pixl}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pixl_secret_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-pixl_sales_brain}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pixl} -d ${POSTGRES_DB:-pixl_sales_brain}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: pixl-sales-brain-api
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pixl}:${POSTGRES_PASSWORD:-pixl_secret_2026}@postgres:5432/${POSTGRES_DB:-pixl_sales_brain}?schema=public
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-change-me-in-production}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3001}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SCRAPER_URL: ${NEXT_PUBLIC_SCRAPER_URL:-http://localhost:3001}
+    container_name: pixl-sales-brain-web
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_SCRAPER_URL: ${NEXT_PUBLIC_SCRAPER_URL:-http://localhost:3001}
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  uploads:

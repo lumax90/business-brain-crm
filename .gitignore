@@ -39,3 +39,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# server (Express backend)
+server/node_modules
+server/prisma/dev.db
+server/prisma/dev.db-journal
+server/dist
+server/.env
+
+# playwright / crawlee
+storage/
+crawlee_storage/
+
+# prisma
+/prisma.config.ts

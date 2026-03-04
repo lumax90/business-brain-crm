@@ -1,0 +1,497 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model LeadList {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  color          String   @default("#6366f1")
+  leads          Lead[]
+  userId         String   @default("")
+  organizationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Lead {
+  id              String    @id @default(uuid())
+  name            String?
+  email           String?
+  company         String?
+  title           String?
+  phone           String?
+  linkedinUrl     String?
+  location        String?
+  website         String?
+  status          String    @default("new")
+  source          String    @default("manual")
+  score           Int       @default(0)
+  tags            String    @default("[]")
+  customFields    String    @default("{}")
+  notes           String?
+  list            LeadList? @relation(fields: [listId], references: [id], onDelete: SetNull)
+  listId          String?
+  emailStatus     String    @default("pending")
+  emailVerifiedAt DateTime?
+  emailPattern    String?
+  deals           Deal[]
+  contacts        Contact[]
+  userId         String    @default("")
+  organizationId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([email])
+  @@index([company])
+  @@index([status])
+  @@index([listId])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model AppSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Deal {
+  id                String   @id @default(uuid())
+  title             String
+  value             Float    @default(0)
+  currency          String   @default("USD")
+  stage             String   @default("new")
+  probability       Int      @default(0)
+  contactName       String?
+  company           String?
+  notes             String?
+  expectedCloseDate String?
+  lead              Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  leadId            String?
+  userId            String   @default("")
+  organizationId    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([stage])
+  @@index([leadId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Invoice {
+  id            String    @id @default(uuid())
+  invoiceNumber String    @unique
+  clientName    String
+  clientEmail   String?
+  clientCompany String?
+  status        String    @default("draft") // draft, sent, paid, overdue, cancelled
+  issueDate     String
+  dueDate       String
+  items         String    @default("[]") // JSON array of line items [{description, qty, unitPrice, total}]
+  subtotal      Float     @default(0)
+  taxRate       Float     @default(0)
+  taxAmount     Float     @default(0)
+  total         Float     @default(0)
+  currency      String    @default("USD")
+  notes         String?
+  paidAt          DateTime?
+  userId          String    @default("")
+  organizationId  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([clientName])
+  @@index([issueDate])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Expense {
+  id             String   @id @default(uuid())
+  description    String
+  category       String   @default("other") // office, software, marketing, travel, salary, utilities, other
+  amount         Float    @default(0)
+  currency       String   @default("USD")
+  date           String
+  vendor         String?
+  recurring      Boolean  @default(false)
+  recurPeriod    String? // monthly, quarterly, yearly
+  notes          String?
+  receipt        String? // file path or URL
+  userId         String   @default("")
+  organizationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([category])
+  @@index([date])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Company {
+  id             String          @id @default(uuid())
+  name           String
+  domain         String?
+  industry       String?
+  size           String? // 1-10, 11-50, 51-200, 201-500, 500+
+  website        String?
+  phone          String?
+  address        String?
+  notes          String?
+  contacts       Contact[]
+  projects       Project[]
+  proposals      Proposal[]
+  recurringItems RecurringItem[]
+  userId         String          @default("")
+  organizationId String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([name])
+  @@index([industry])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Contact {
+  id              String     @id @default(uuid())
+  name            String
+  email           String?
+  phone           String?
+  role            String?
+  tags            String     @default("[]")
+  notes           String?
+  source          String     @default("manual") // manual, lead_conversion, import
+  company         Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId       String?
+  lead            Lead?      @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  leadId          String?
+  lastContactedAt DateTime?
+  projects        Project[]
+  proposals       Proposal[]
+  userId         String     @default("")
+  organizationId String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([name])
+  @@index([email])
+  @@index([companyId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  status      String   @default("active") // active, on_hold, completed, cancelled
+  priority    String   @default("medium") // low, medium, high, urgent
+  startDate   String?
+  endDate     String?
+  budget      Float    @default(0)
+  notes       String?
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId   String?
+  contact     Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId   String?
+  tasks          Task[]
+  userId         String   @default("")
+  organizationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+  @@index([companyId])
+  @@index([contactId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  status      String   @default("todo") // todo, in_progress, done
+  priority    String   @default("medium") // low, medium, high, urgent
+  dueDate     String?
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Proposal {
+  id                   String   @id @default(uuid())
+  proposalNumber       String   @unique
+  title                String
+  clientName           String
+  clientEmail          String?
+  clientCompany        String?
+  status               String   @default("draft") // draft, sent, accepted, rejected, expired
+  validUntil           String?
+  items                String   @default("[]") // JSON array of line items
+  subtotal             Float    @default(0)
+  taxRate              Float    @default(0)
+  taxAmount            Float    @default(0)
+  total                Float    @default(0)
+  currency             String   @default("USD")
+  notes                String?
+  terms                String? // Terms & conditions
+  convertedToInvoiceId String? // If accepted and converted
+  company              Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId            String?
+  contact              Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contactId            String?
+  userId               String   @default("")
+  organizationId       String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([status])
+  @@index([companyId])
+  @@index([contactId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model Campaign {
+  id              String         @id @default(uuid())
+  name            String
+  description     String?
+  status          String         @default("draft") // draft, active, paused, completed
+  type            String         @default("email") // email, sms, multi-channel
+  audienceType    String         @default("all") // all, leads, contacts, custom
+  totalRecipients Int            @default(0)
+  sentCount       Int            @default(0)
+  openCount       Int            @default(0)
+  replyCount      Int            @default(0)
+  steps           CampaignStep[]
+  userId          String         @default("")
+  organizationId  String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([status])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model CampaignStep {
+  id         String   @id @default(uuid())
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  stepOrder  Int      @default(0)
+  type       String   @default("email") // email, wait, condition
+  subject    String?
+  body       String?
+  delayDays  Int      @default(0) // wait X days before this step
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([stepOrder])
+}
+
+model RecurringItem {
+  id          String   @id @default(uuid())
+  name        String
+  type        String // revenue, expense
+  amount      Float    @default(0)
+  currency    String   @default("USD")
+  frequency   String   @default("monthly") // weekly, monthly, quarterly, yearly
+  category    String   @default("general")
+  nextDueDate String?
+  startDate   String?
+  endDate     String?
+  isActive       Boolean  @default(true)
+  notes          String?
+  company        Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId      String?
+  userId         String   @default("")
+  organizationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+  @@index([companyId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model File {
+  id           String   @id @default(uuid())
+  name         String // Display name (editable)
+  originalName String // Original uploaded filename
+  mimeType     String
+  size         Int // Bytes
+  path         String // Storage path on disk
+  description  String?
+  tags         String   @default("[]") // JSON array of tags
+  entityType   String? // lead, contact, company, project, proposal, invoice, deal, expense, campaign
+  entityId     String?
+  entityName   String? // Cached display name of linked entity
+  folder         String   @default("general") // general, contracts, invoices, proposals, receipts, images, other
+  userId         String   @default("")
+  organizationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([folder])
+  @@index([mimeType])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model User {
+  id            String       @id
+  name          String
+  email         String
+  emailVerified Boolean      @default(false)
+  image         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  members       Member[]
+  invitations   Invitation[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id
+  expiresAt            DateTime
+  token                String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Organization {
+  id          String       @id
+  name        String
+  slug        String
+  logo        String?
+  createdAt   DateTime
+  metadata    String?
+  members     Member[]
+  invitations Invitation[]
+
+  @@unique([slug])
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+// ─── Notification model ───
+model Notification {
+  id             String   @id @default(uuid())
+  userId         String
+  organizationId String?
+  type           String   @default("info")    // info, success, warning, error
+  title          String
+  message        String
+  href           String?                       // optional link to navigate
+  entity         String?                       // lead, deal, invoice, etc.
+  entityId       String?
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([read])
+  @@index([createdAt])
+}
