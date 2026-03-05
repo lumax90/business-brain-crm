@@ -18,6 +18,7 @@ import {
     RiExternalLinkLine,
     RiShieldCheckLine,
     RiArrowRightLine,
+    RiEditLine,
 } from "@remixicon/react";
 
 const emailStatusConfig: Record<EmailVerificationStatus, { label: string; color: string; icon: React.ReactNode }> = {
@@ -67,6 +68,32 @@ export default function LeadEnginePage() {
     const [emailResults, setEmailResults] = React.useState<Record<string, EmailResult[]>>({});
     const [expandedRow, setExpandedRow] = React.useState<string | null>(null);
     const [error, setError] = React.useState<string | null>(null);
+
+    // Search and Edit state
+    const [localSearch, setLocalSearch] = React.useState("");
+    const [editIndex, setEditIndex] = React.useState<number | null>(null);
+    const [editLeadData, setEditLeadData] = React.useState<Partial<ScrapedLead>>({});
+
+    const filteredResults = React.useMemo(() => {
+        if (!localSearch.trim()) return results;
+        const lower = localSearch.toLowerCase();
+        return results.filter(
+            (r) =>
+                r.name?.toLowerCase().includes(lower) ||
+                r.company?.toLowerCase().includes(lower) ||
+                r.title?.toLowerCase().includes(lower) ||
+                r.email?.toLowerCase().includes(lower)
+        );
+    }, [results, localSearch]);
+
+    const handleSaveEdit = () => {
+        if (editIndex === null) return;
+        setResults((prev) =>
+            prev.map((l, idx) => (idx === editIndex ? { ...l, ...editLeadData } as ScrapedLead : l))
+        );
+        setEditIndex(null);
+        setEditLeadData({});
+    };
 
     const handleSearch = async () => {
         if (!jobTitle.trim()) return;
@@ -283,16 +310,28 @@ export default function LeadEnginePage() {
                 {/* Results */}
                 {searchDone && (
                     <div className="space-y-3 animate-fade-in">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <h3 className="text-sm font-semibold text-foreground">
                                 Results{" "}
                                 <span className="text-muted-foreground font-normal">
-                                    ({results.length} leads found)
+                                    ({filteredResults.length} leads found)
                                 </span>
                             </h3>
+                            <div>
+                                <div className="relative">
+                                    <RiSearchLine className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search by name, company..."
+                                        value={localSearch}
+                                        onChange={(e) => setLocalSearch(e.target.value)}
+                                        className="h-8 w-full sm:w-64 rounded-md border border-input bg-background pl-8 pr-3 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary/40 transition-all"
+                                    />
+                                </div>
+                            </div>
                         </div>
 
-                        {results.length === 0 ? (
+                        {filteredResults.length === 0 ? (
                             <div className="rounded-xl border border-border bg-card p-12 text-center">
                                 <RiSearchLine className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
                                 <p className="text-sm font-medium text-muted-foreground">
@@ -326,8 +365,9 @@ export default function LeadEnginePage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {results.map((lead, i) => {
-                                                const key = `${lead.name}-${i}`;
+                                            {filteredResults.map((lead) => {
+                                                const originalIndex = results.indexOf(lead);
+                                                const key = `${lead.name}-${originalIndex}`;
                                                 const isFinding = findingEmail === key;
                                                 const hasEmailResults = emailResults[key];
                                                 const isExpanded = expandedRow === key;
@@ -339,7 +379,7 @@ export default function LeadEnginePage() {
                                                                 "border-b border-border/60 hover:bg-muted/30 transition-colors animate-fade-in",
                                                                 isExpanded && "bg-muted/20"
                                                             )}
-                                                            style={{ animationDelay: `${i * 0.03}s` }}
+                                                            style={{ animationDelay: `${originalIndex * 0.03}s` }}
                                                         >
                                                             {/* Person */}
                                                             <td className="py-3 px-4">
@@ -410,11 +450,20 @@ export default function LeadEnginePage() {
                                                                 </a>
                                                             </td>
 
-                                                            {/* Actions */}
                                                             <td className="py-3 px-4 text-right">
                                                                 <div className="flex items-center justify-end gap-1.5">
                                                                     <button
-                                                                        onClick={() => handleFindEmail(lead, i)}
+                                                                        onClick={() => {
+                                                                            setEditIndex(originalIndex);
+                                                                            setEditLeadData({ ...lead });
+                                                                        }}
+                                                                        className="flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-input text-xs font-medium transition-colors hover:bg-muted hover:text-foreground text-muted-foreground"
+                                                                    >
+                                                                        <RiEditLine className="w-3 h-3" />
+                                                                        Edit
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleFindEmail(lead, originalIndex)}
                                                                         disabled={isFinding}
                                                                         className={cn(
                                                                             "flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-input text-xs font-medium transition-colors",
@@ -431,7 +480,7 @@ export default function LeadEnginePage() {
                                                                         {hasEmailResults ? "Retry" : "Find Email"}
                                                                     </button>
                                                                     <button
-                                                                        onClick={() => handleAddToCrm(lead, i)}
+                                                                        onClick={() => handleAddToCrm(lead, originalIndex)}
                                                                         disabled={lead.addedToCrm}
                                                                         className={cn(
                                                                             "flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium transition-colors",
@@ -567,6 +616,46 @@ export default function LeadEnginePage() {
                                 </p>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* Edit Modal */}
+                {editIndex !== null && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
+                        <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-scale">
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                                <h2 className="text-sm font-semibold text-foreground">Edit Result</h2>
+                                <button onClick={() => { setEditIndex(null); setEditLeadData({}); }} className="w-7 h-7 rounded flex items-center justify-center hover:bg-muted"><RiCloseLine className="w-4 h-4" /></button>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-foreground">Name</label>
+                                    <input value={editLeadData.name || ""} onChange={(e) => setEditLeadData({ ...editLeadData, name: e.target.value })}
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-foreground">Company</label>
+                                    <input value={editLeadData.company || ""} onChange={(e) => setEditLeadData({ ...editLeadData, company: e.target.value })}
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-foreground">Job Title</label>
+                                    <input value={editLeadData.title || ""} onChange={(e) => setEditLeadData({ ...editLeadData, title: e.target.value })}
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-foreground">LinkedIn URL</label>
+                                    <input value={editLeadData.linkedinUrl || ""} onChange={(e) => setEditLeadData({ ...editLeadData, linkedinUrl: e.target.value })}
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30" />
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-2 px-6 py-3 border-t border-border bg-muted/10">
+                                <button onClick={() => { setEditIndex(null); setEditLeadData({}); }} className="h-8 px-4 rounded-md border border-input text-xs font-medium hover:bg-muted transition-colors">Cancel</button>
+                                <button onClick={handleSaveEdit} className="h-8 px-5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors">
+                                    Save Changes
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

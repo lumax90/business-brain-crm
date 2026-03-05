@@ -39,6 +39,7 @@ import {
     RiAlertLine,
     RiErrorWarningLine,
     RiUserStarLine,
+    RiEditLine,
 } from "@remixicon/react";
 
 import { API, apiFetch } from "@/lib/api";
@@ -231,6 +232,11 @@ export default function LeadsPage() {
     // ─── Add Lead State ───
     const [showAddLead, setShowAddLead] = React.useState(false);
     const [newLead, setNewLead] = React.useState<Record<string, string>>({});
+
+    // ─── Edit Lead State ───
+    const [showEditLead, setShowEditLead] = React.useState(false);
+    const [editLeadData, setEditLeadData] = React.useState<Record<string, string>>({});
+    const [editLeadId, setEditLeadId] = React.useState<string | null>(null);
 
     // ─── Selection State ───
     const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
@@ -554,6 +560,21 @@ export default function LeadsPage() {
             fetchLeads();
             toast.success("Lead created");
         } catch (err) { console.error(err); toast.error("Failed to create lead"); }
+    };
+
+    // ─── Edit Lead ───
+    const handleEditLead = async () => {
+        if (!editLeadId) return;
+        try {
+            await apiFetch(`${API}/api/leads/${editLeadId}`, {
+                method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editLeadData),
+            });
+            setShowEditLead(false);
+            setEditLeadData({});
+            setEditLeadId(null);
+            fetchLeads();
+            toast.success("Lead updated");
+        } catch (err) { console.error(err); toast.error("Failed to update lead"); }
     };
 
     // ─── Delete Lead ───
@@ -894,13 +915,16 @@ export default function LeadsPage() {
                                                     {renderCell(lead, col)}
                                                 </td>
                                             ))}
-                                            <td className="py-2 px-3 text-right w-20">
+                                            <td className="py-2 px-3 text-right w-24">
                                                 <div className="flex items-center justify-end gap-1">
                                                     {lead.status !== "converted" && (
                                                         <button onClick={() => convertLead(lead.id)} className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10 transition-colors" title="Convert to CRM Contact">
                                                             <RiUserStarLine className="w-3 h-3" />
                                                         </button>
                                                     )}
+                                                    <button onClick={() => { setEditLeadId(lead.id); setEditLeadData(Object.fromEntries(Object.entries(lead).filter(([_, v]) => typeof v === 'string' || typeof v === 'number').map(([k, v]) => [k, String(v)]))); setShowEditLead(true); }} className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-colors" title="Edit Lead">
+                                                        <RiEditLine className="w-3 h-3" />
+                                                    </button>
                                                     <button onClick={() => deleteLead(lead.id)} className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Delete Lead">
                                                         <RiDeleteBinLine className="w-3 h-3" />
                                                     </button>
@@ -1081,6 +1105,43 @@ export default function LeadsPage() {
                     </div>
                 </div>
             )}
+
+            {showEditLead && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">
+                    <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-scale">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                            <h2 className="text-sm font-semibold text-foreground">Edit Lead</h2>
+                            <button onClick={() => { setShowEditLead(false); setEditLeadData({}); setEditLeadId(null); }} className="w-7 h-7 rounded flex items-center justify-center hover:bg-muted"><RiCloseLine className="w-4 h-4" /></button>
+                        </div>
+                        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+                            {columns.filter((c) => !c.isCustom && c.key !== "score").map((col) => (
+                                <div key={col.key} className="space-y-1">
+                                    <label className="text-xs font-medium text-foreground">{col.label}</label>
+                                    {col.key === "status" ? (
+                                        <select value={editLeadData[col.key] || "new"} onChange={(e) => setEditLeadData({ ...editLeadData, [col.key]: e.target.value })}
+                                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs">
+                                            <option value="new">New</option><option value="contacted">Contacted</option>
+                                            <option value="qualified">Qualified</option><option value="unqualified">Unqualified</option>
+                                            <option value="nurturing">Nurturing</option><option value="converted">Converted</option>
+                                        </select>
+                                    ) : (
+                                        <input value={editLeadData[col.key] || ""} onChange={(e) => setEditLeadData({ ...editLeadData, [col.key]: e.target.value })}
+                                            placeholder={`Enter ${col.label.toLowerCase()}`}
+                                            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/30" />
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex justify-end gap-2 px-6 py-3 border-t border-border">
+                            <button onClick={() => { setShowEditLead(false); setEditLeadData({}); setEditLeadId(null); }} className="h-7 px-3 rounded-md border border-input text-xs hover:bg-muted">Cancel</button>
+                            <button onClick={handleEditLead} className="h-7 px-4 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90">
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* ─── List Delete Confirmation ─── */}
             {deleteListTarget && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-fade-in">

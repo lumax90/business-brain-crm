@@ -43,10 +43,10 @@ leadsRouter.get("/", async (req: Request, res: Response) => {
 
         if (search) {
             where.OR = [
-                { name: { contains: search } },
-                { email: { contains: search } },
-                { company: { contains: search } },
-                { title: { contains: search } },
+                { name: { contains: search, mode: "insensitive" } },
+                { email: { contains: search, mode: "insensitive" } },
+                { company: { contains: search, mode: "insensitive" } },
+                { title: { contains: search, mode: "insensitive" } },
             ];
         }
 
@@ -214,6 +214,66 @@ leadsRouter.post("/", async (req: Request, res: Response) => {
         });
     } catch (error: unknown) {
         console.error("Create lead error:", error);
+        const message = error instanceof Error ? error.message : "Unknown error";
+        res.status(500).json({ error: message });
+    }
+});
+
+// ─── PUT /api/leads/:id — Update existing lead ───
+leadsRouter.put("/:id", async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const tenant = tenantFilter(req);
+
+        // Check ownership
+        const existing = await prisma.lead.findFirst({
+            where: { id, ...tenant }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: "Lead not found" });
+        }
+
+        const data = req.body;
+        const updateData: any = {};
+
+        // Only update provided fields
+        if (data.name !== undefined) updateData.name = data.name;
+        if (data.email !== undefined) updateData.email = data.email;
+        if (data.company !== undefined) updateData.company = data.company;
+        if (data.title !== undefined) updateData.title = data.title;
+        if (data.phone !== undefined) updateData.phone = data.phone;
+        if (data.linkedinUrl !== undefined) updateData.linkedinUrl = data.linkedinUrl;
+        if (data.location !== undefined) updateData.location = data.location;
+        if (data.website !== undefined) updateData.website = data.website;
+        if (data.status !== undefined) updateData.status = data.status;
+        if (data.source !== undefined) updateData.source = data.source;
+        if (data.score !== undefined) updateData.score = data.score;
+        if (data.notes !== undefined) updateData.notes = data.notes;
+
+        if (Array.isArray(data.tags)) {
+            updateData.tags = JSON.stringify(data.tags);
+        }
+
+        if (data.customFields) {
+            updateData.customFields = JSON.stringify(data.customFields);
+        }
+
+        const updatedLead = await prisma.lead.update({
+            where: { id },
+            data: updateData
+        });
+
+        res.json({
+            success: true,
+            lead: {
+                ...updatedLead,
+                tags: JSON.parse(updatedLead.tags || "[]"),
+                customFields: JSON.parse(updatedLead.customFields || "{}"),
+            },
+        });
+    } catch (error: unknown) {
+        console.error("Update lead error:", error);
         const message = error instanceof Error ? error.message : "Unknown error";
         res.status(500).json({ error: message });
     }
