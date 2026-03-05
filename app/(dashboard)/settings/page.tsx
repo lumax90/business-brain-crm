@@ -875,14 +875,45 @@ export default function SettingsPage() {
                                             </div>
 
                                             <div className="space-y-4">
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-foreground">Verification Provider</label>
+                                                <div className="space-y-1.5 animate-in slide-in-from-top-2">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <label className="text-xs font-medium text-foreground">Self-Hosted SMTP Verifier URL</label>
+                                                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded text-emerald-600 bg-emerald-500/10">Priority 1</span>
+                                                    </div>
+                                                    <input
+                                                        type="url"
+                                                        placeholder="https://verify.pixldata.com"
+                                                        value={settings["SMTP_VERIFIER_URL"] || ""}
+                                                        onChange={(e) => updateSetting("SMTP_VERIFIER_URL", e.target.value)}
+                                                        className={inputCls}
+                                                    />
+                                                    <p className="text-[10px] text-muted-foreground">
+                                                        If configured, the system will always try to use this first. No rate limits.
+                                                    </p>
+                                                </div>
+
+                                                <div className="space-y-1.5 animate-in slide-in-from-top-2 mb-4">
+                                                    <label className="text-xs font-medium text-foreground">SMTP Verifier API Key</label>
+                                                    <input
+                                                        type="password"
+                                                        placeholder="Enter your verifier API key"
+                                                        value={settings["SMTP_VERIFIER_API_KEY"] || ""}
+                                                        onChange={(e) => updateSetting("SMTP_VERIFIER_API_KEY", e.target.value)}
+                                                        className={inputCls}
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-1.5 pt-4 border-t border-border">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <label className="text-xs font-medium text-foreground">Fallback Verification Provider</label>
+                                                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded text-amber-600 bg-amber-500/10">Priority 2</span>
+                                                    </div>
                                                     <select
                                                         value={settings["EMAIL_VERIFICATION_PROVIDER"] || "hunter"}
                                                         onChange={(e) => updateSetting("EMAIL_VERIFICATION_PROVIDER", e.target.value)}
                                                         className={inputCls}
                                                     >
-                                                        <option value="local">Local Port 25 (Free, Requires Open Port)</option>
+                                                        <option value="local">Local Port 25 (Fallback only)</option>
                                                         <option value="hunter">Hunter.io</option>
                                                         <option value="zerobounce">ZeroBounce</option>
                                                     </select>
@@ -960,6 +991,7 @@ export default function SettingsPage() {
                                     onClick={() => handleSave([
                                         "DOMAIN_PROVIDER", "SERPER_API_KEY",
                                         "OPENAI_API_KEY", "AI_MODEL",
+                                        "SMTP_VERIFIER_URL", "SMTP_VERIFIER_API_KEY",
                                         "EMAIL_VERIFICATION_PROVIDER", "HUNTER_API_KEY", "ZEROBOUNCE_API_KEY"
                                     ])}
                                     disabled={saving || loading}
