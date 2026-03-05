@@ -296,69 +296,62 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
                 const domainKey = domain.toLowerCase();
                 const knownPattern = domainPatternCache.get(domainKey);
 
-                let topEmails: string[] = [];
-                let candidates: ReturnType<typeof guessEmails> = [];
+                // Always generate standard fallback candidates
+                let candidates = guessEmails(firstName, lastNameFinal, domain);
 
                 if (knownPattern) {
-                    // We already know the pattern — generate only that one + verify
+                    // We already know the pattern — bring it to the very front so it gets checked first
                     const email = generateFromPattern(firstName, lastNameFinal, domain, knownPattern);
                     if (email) {
-                        topEmails = [email];
-                        candidates = [{ email, pattern: knownPattern, priority: 1 }];
-                        console.log(`  🎯 Using known pattern "${knownPattern}" for ${domain}: ${email}`);
+                        candidates = candidates.filter(c => c.email !== email); // Remove duplicate
+                        candidates.unshift({ email, pattern: knownPattern, priority: 0 }); // Highest priority
+                        console.log(`  🎯 Prioritizing known pattern "${knownPattern}" (will fallback if invalid): ${email}`);
                     }
                 }
 
-                // If no known pattern (or generateFromPattern failed), use full candidate list
-                if (topEmails.length === 0) {
-                    if (useAiFallback) {
-                        candidates = guessEmails(firstName, lastNameFinal, domain);
-                        try {
-                            console.log(`    🤖 Asking AI to guess email format for ${lead.name} at ${domain}...`);
-                            if (settings["OPENAI_API_KEY"]) {
-                                const { OpenAI } = require("openai");
-                                const openai = new OpenAI({ apiKey: settings["OPENAI_API_KEY"] });
-                                const model = settings["AI_MODEL"] || "gpt-4o-mini";
+                if (useAiFallback) {
+                    try {
+                        console.log(`    🤖 Asking AI to guess email format for ${lead.name} at ${domain}...`);
+                        if (settings["OPENAI_API_KEY"]) {
+                            const { OpenAI } = require("openai");
+                            const openai = new OpenAI({ apiKey: settings["OPENAI_API_KEY"] });
+                            const model = settings["AI_MODEL"] || "gpt-4o-mini";
 
-                                const aiResponse = await openai.chat.completions.create({
-                                    model,
-                                    messages: [
-                                        {
-                                            role: "system",
-                                            content: "You are an expert data researcher. Your job is to identify the MOST LIKELY email address format for a person at a given company. Return ONLY a JSON object with 'email' (string). If you cannot guess confidently, return null."
-                                        },
-                                        {
-                                            role: "user",
-                                            content: `Person Name: ${fullName}\nCompany Domain: ${domain}\n\nWhat is the most likely email address?`
-                                        }
-                                    ],
-                                    response_format: { type: "json_object" },
-                                    temperature: 0.1,
-                                });
-
-                                const content = aiResponse.choices[0].message.content;
-                                if (content) {
-                                    const aiResult = JSON.parse(content);
-                                    if (aiResult.email && aiResult.email.endsWith(`@${domain}`)) {
-                                        topEmails = [aiResult.email.toLowerCase()];
-                                        console.log(`    🚀 AI guessed email: ${topEmails[0]}`);
-                                        if (!candidates.find(c => c.email === topEmails[0])) {
-                                            candidates.unshift({ email: topEmails[0], pattern: "ai_guess", priority: 0 });
-                                        }
+                            const aiResponse = await openai.chat.completions.create({
+                                model,
+                                messages: [
+                                    {
+                                        role: "system",
+                                        content: "You are an expert data researcher. Your job is to identify the MOST LIKELY email address format for a person at a given company. Return ONLY a JSON object with 'email' (string). If you cannot guess confidently, return null."
+                                    },
+                                    {
+                                        role: "user",
+                                        content: `Person Name: ${fullName}\nCompany Domain: ${domain}\n\nWhat is the most likely email address?`
                                     }
+                                ],
+                                response_format: { type: "json_object" },
+                                temperature: 0.1,
+                            });
+
+                            const content = aiResponse.choices[0].message.content;
+                            if (content) {
+                                const aiResult = JSON.parse(content);
+                                if (aiResult.email && aiResult.email.endsWith(`@${domain}`)) {
+                                    const aiEmail = aiResult.email.toLowerCase();
+                                    console.log(`    🚀 AI prioritized guessed email: ${aiEmail}`);
+                                    candidates = candidates.filter(c => c.email !== aiEmail);
+                                    candidates.unshift({ email: aiEmail, pattern: "ai_guess", priority: -1 });
                                 }
                             }
-                        } catch (aiErr) {
-                            console.error(`    ❌ AI Fallback failed for ${lead.name}:`, aiErr);
                         }
-                    }
-
-                    // Standard pattern guessing
-                    if (topEmails.length === 0) {
-                        candidates = guessEmails(firstName, lastNameFinal, domain);
-                        topEmails = candidates.slice(0, 5).map((c) => c.email);
+                    } catch (aiErr) {
+                        console.error(`    ❌ AI Fallback failed for ${lead.name}:`, aiErr);
                     }
                 }
+
+                // Verify the top 5 candidates. 
+                // If a company uses a different pattern for this user, we will smoothly fallback to the rest.
+                const topEmails = candidates.slice(0, 5).map((c) => c.email);
 
                 const verifications = await verifyEmailCandidates(topEmails, verificationProvider, verificationApiKey, remoteUrl, remoteApiKey);
 
