@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { guessEmails, guessCompanyDomain } from "../scrapers/email-guesser";
+import { guessEmails, guessCompanyDomain, generateFromPattern } from "../scrapers/email-guesser";
 import { verifyEmailCandidates } from "../scrapers/email-verifier";
 import { findCompanyDomain } from "../scrapers/domain-finder";
 import { prisma } from "../lib/prisma";
@@ -16,7 +16,7 @@ emailRouter.post("/find", async (req: Request, res: Response) => {
             return;
         }
 
-        const emailDomain = domain || guessCompanyDomain(company || "");
+        const emailDomain = domain || await guessCompanyDomain(company || "");
 
         if (!emailDomain) {
             res.status(400).json({
@@ -85,7 +85,7 @@ emailRouter.get("/stats", async (_req: Request, res: Response) => {
     }
 });
 
-// ─── POST /api/email/enrich — Bulk enrichment via SSE ───
+// ─── POST /api/email/enrich — Bulk enrichment via SSE (Apollo/Hunter style) ───
 emailRouter.post("/enrich", async (req: Request, res: Response) => {
     try {
         const { leadIds, listId, useAiFallback } = req.body as { leadIds?: string[]; listId?: string; useAiFallback?: boolean };
@@ -116,7 +116,6 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
             Connection: "keep-alive",
-            "Access-Control-Allow-Origin": "*",
         });
 
         const sendEvent = (data: any) => {
@@ -133,7 +132,7 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
 
         // Fetch Verification Provider Settings once for the batch
         const settingsList = await prisma.appSetting.findMany({
-            where: { key: { in: ["EMAIL_VERIFICATION_PROVIDER", "HUNTER_API_KEY", "ZEROBOUNCE_API_KEY"] } }
+            where: { key: { in: ["EMAIL_VERIFICATION_PROVIDER", "HUNTER_API_KEY", "ZEROBOUNCE_API_KEY", "OPENAI_API_KEY", "AI_MODEL"] } }
         });
         const settings = settingsList.reduce((acc: Record<string, string>, curr) => {
             acc[curr.key] = curr.value;
@@ -143,6 +142,36 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
         const verificationProvider = settings["EMAIL_VERIFICATION_PROVIDER"] || "local";
         const verificationApiKey = verificationProvider === "hunter" ? settings["HUNTER_API_KEY"] :
             verificationProvider === "zerobounce" ? settings["ZEROBOUNCE_API_KEY"] : undefined;
+
+        // ─── PATTERN LEARNING CACHE ───
+        // Key: domain → Value: winning email pattern (e.g. "first.last", "flast")
+        const domainPatternCache = new Map<string, string>();
+
+        // Pre-load any known patterns from previously enriched leads in the same batch
+        const companies = [...new Set(leads.map(l => l.company).filter(Boolean))];
+        if (companies.length > 0) {
+            const existingPatterns = await prisma.lead.findMany({
+                where: {
+                    company: { in: companies as string[] },
+                    emailStatus: "found",
+                    emailPattern: { not: null },
+                    website: { not: null },
+                },
+                select: { website: true, emailPattern: true },
+                take: 500,
+            });
+            for (const ep of existingPatterns) {
+                if (ep.website && ep.emailPattern) {
+                    const dom = ep.website.replace(/^www\./, "").toLowerCase();
+                    if (!domainPatternCache.has(dom)) {
+                        domainPatternCache.set(dom, ep.emailPattern);
+                    }
+                }
+            }
+            if (domainPatternCache.size > 0) {
+                console.log(`📚 Pre-loaded ${domainPatternCache.size} domain patterns from existing data`);
+            }
+        }
 
         for (const lead of leads) {
             try {
@@ -185,16 +214,66 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
                     continue;
                 }
 
-                // Get domain from website or company
+                // ─── DOMAIN RESOLUTION (Apollo/Hunter style priority) ───
                 let domain = "";
+
+                // Priority 1: Use lead.website (found by "Find Domains" step)
                 if (lead.website) {
                     try {
                         const url = lead.website.startsWith("http") ? lead.website : `https://${lead.website}`;
                         domain = new URL(url).hostname.replace(/^www\./, "");
-                    } catch { }
+                    } catch {
+                        // website field might just be a raw domain
+                        domain = lead.website.replace(/^www\./, "").split("/")[0];
+                    }
                 }
+
+                // Priority 2: Check if another lead at same company already has a domain
                 if (!domain && lead.company) {
-                    domain = guessCompanyDomain(lead.company);
+                    const cachedLead = await prisma.lead.findFirst({
+                        where: {
+                            company: { equals: lead.company },
+                            website: { not: null },
+                        },
+                        select: { website: true },
+                    });
+                    if (cachedLead?.website) {
+                        domain = cachedLead.website.replace(/^www\./, "").split("/")[0];
+                        // Also save it back to this lead
+                        await prisma.lead.update({
+                            where: { id: lead.id },
+                            data: { website: cachedLead.website },
+                        });
+                    }
+                }
+
+                // Priority 3: Auto-discover domain using findCompanyDomain()
+                if (!domain && lead.company) {
+                    console.log(`  🔍 Auto-discovering domain for: ${lead.company}`);
+                    sendEvent({
+                        type: "progress", processed, found, total: leads.length,
+                        lead: { id: lead.id, name: lead.name, email: null, status: "searching", reason: `Finding domain for ${lead.company}...` },
+                    });
+
+                    try {
+                        const domainResult = await findCompanyDomain(lead.company, "", useAiFallback || false);
+                        if (domainResult.domain && domainResult.confidence >= 60) {
+                            domain = domainResult.domain;
+                            // Save discovered domain to ALL leads with this company
+                            await prisma.lead.updateMany({
+                                where: { company: { equals: lead.company } },
+                                data: { website: domain },
+                            });
+                            console.log(`  ✅ Auto-discovered: ${lead.company} → ${domain}`);
+                        }
+                    } catch (domErr) {
+                        console.error(`  ❌ Domain discovery failed for ${lead.company}:`, domErr);
+                    }
+                }
+
+                // Priority 4: Last resort — smart domain guessing with MX validation
+                if (!domain && lead.company) {
+                    domain = await guessCompanyDomain(lead.company);
                 }
 
                 if (!domain) {
@@ -211,68 +290,72 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
                     continue;
                 }
 
-                // Generate candidates and verify
+                // ─── PATTERN LEARNING: Check if we already know this domain's pattern ───
+                const domainKey = domain.toLowerCase();
+                const knownPattern = domainPatternCache.get(domainKey);
+
                 let topEmails: string[] = [];
                 let candidates: ReturnType<typeof guessEmails> = [];
 
-                if (useAiFallback) {
-                    // When using AI fallback, get all candidates to check
-                    candidates = guessEmails(firstName, lastNameFinal, domain);
-
-                    try {
-                        console.log(`    🤖 Asking AI to guess email format for ${lead.name} at ${domain}...`);
-                        const settingsList = await prisma.appSetting.findMany({
-                            where: { key: { in: ["OPENAI_API_KEY", "AI_MODEL"] } }
-                        });
-                        const settings = settingsList.reduce((acc: Record<string, string>, curr: { key: string, value: string }) => {
-                            acc[curr.key] = curr.value;
-                            return acc;
-                        }, {});
-
-                        if (settings["OPENAI_API_KEY"]) {
-                            const { OpenAI } = require("openai");
-                            const openai = new OpenAI({ apiKey: settings["OPENAI_API_KEY"] });
-                            const model = settings["AI_MODEL"] || "gpt-4o-mini";
-
-                            const aiResponse = await openai.chat.completions.create({
-                                model,
-                                messages: [
-                                    {
-                                        role: "system",
-                                        content: "You are an expert data researcher. Your job is to identify the MOST LIKELY email address format for a person at a given company. Return ONLY a JSON object with 'email' (string). If you cannot guess confidently, return null."
-                                    },
-                                    {
-                                        role: "user",
-                                        content: `Person Name: ${fullName}\nCompany Domain: ${domain}\n\nWhat is the most likely email address?`
-                                    }
-                                ],
-                                response_format: { type: "json_object" },
-                                temperature: 0.1,
-                            });
-
-                            const content = aiResponse.choices[0].message.content;
-                            if (content) {
-                                const aiResult = JSON.parse(content);
-                                if (aiResult.email && aiResult.email.endsWith(`@${domain}`)) {
-                                    topEmails = [aiResult.email.toLowerCase()];
-                                    console.log(`    🚀 AI guessed email: ${topEmails[0]}`);
-
-                                    // Make sure it's in candidates list so the rest of the flow works
-                                    if (!candidates.find(c => c.email === topEmails[0])) {
-                                        candidates.unshift({ email: topEmails[0], pattern: "ai_guess", priority: 0 });
-                                    }
-                                }
-                            }
-                        }
-                    } catch (aiErr) {
-                        console.error(`    ❌ AI Fallback failed for ${lead.name}:`, aiErr);
+                if (knownPattern) {
+                    // We already know the pattern — generate only that one + verify
+                    const email = generateFromPattern(firstName, lastNameFinal, domain, knownPattern);
+                    if (email) {
+                        topEmails = [email];
+                        candidates = [{ email, pattern: knownPattern, priority: 1 }];
+                        console.log(`  🎯 Using known pattern "${knownPattern}" for ${domain}: ${email}`);
                     }
                 }
 
-                // If AI didn't return anything or fallback wasn't used, use standard guessing
+                // If no known pattern (or generateFromPattern failed), use full candidate list
                 if (topEmails.length === 0) {
-                    candidates = guessEmails(firstName, lastNameFinal, domain);
-                    topEmails = candidates.slice(0, 5).map((c) => c.email);
+                    if (useAiFallback) {
+                        candidates = guessEmails(firstName, lastNameFinal, domain);
+                        try {
+                            console.log(`    🤖 Asking AI to guess email format for ${lead.name} at ${domain}...`);
+                            if (settings["OPENAI_API_KEY"]) {
+                                const { OpenAI } = require("openai");
+                                const openai = new OpenAI({ apiKey: settings["OPENAI_API_KEY"] });
+                                const model = settings["AI_MODEL"] || "gpt-4o-mini";
+
+                                const aiResponse = await openai.chat.completions.create({
+                                    model,
+                                    messages: [
+                                        {
+                                            role: "system",
+                                            content: "You are an expert data researcher. Your job is to identify the MOST LIKELY email address format for a person at a given company. Return ONLY a JSON object with 'email' (string). If you cannot guess confidently, return null."
+                                        },
+                                        {
+                                            role: "user",
+                                            content: `Person Name: ${fullName}\nCompany Domain: ${domain}\n\nWhat is the most likely email address?`
+                                        }
+                                    ],
+                                    response_format: { type: "json_object" },
+                                    temperature: 0.1,
+                                });
+
+                                const content = aiResponse.choices[0].message.content;
+                                if (content) {
+                                    const aiResult = JSON.parse(content);
+                                    if (aiResult.email && aiResult.email.endsWith(`@${domain}`)) {
+                                        topEmails = [aiResult.email.toLowerCase()];
+                                        console.log(`    🚀 AI guessed email: ${topEmails[0]}`);
+                                        if (!candidates.find(c => c.email === topEmails[0])) {
+                                            candidates.unshift({ email: topEmails[0], pattern: "ai_guess", priority: 0 });
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (aiErr) {
+                            console.error(`    ❌ AI Fallback failed for ${lead.name}:`, aiErr);
+                        }
+                    }
+
+                    // Standard pattern guessing
+                    if (topEmails.length === 0) {
+                        candidates = guessEmails(firstName, lastNameFinal, domain);
+                        topEmails = candidates.slice(0, 5).map((c) => c.email);
+                    }
                 }
 
                 const verifications = await verifyEmailCandidates(topEmails, verificationProvider, verificationApiKey);
@@ -297,12 +380,18 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
                         },
                     });
                     found++;
+
+                    // ─── LEARN PATTERN for this domain ───
+                    if (!domainPatternCache.has(domainKey) && bestCandidate.pattern !== "ai_guess") {
+                        domainPatternCache.set(domainKey, bestCandidate.pattern);
+                        console.log(`  📚 Learned pattern for ${domainKey}: ${bestCandidate.pattern}`);
+                    }
+
                     sendEvent({
                         type: "progress", processed: processed + 1, found, total: leads.length,
                         lead: { id: lead.id, name: lead.name, email: validResult.email, status: "found", pattern: bestCandidate.pattern },
                     });
                 } else if (catchAllResult && catchAllCandidate) {
-                    // For catch-all, use the most common pattern (first.last)
                     await prisma.lead.update({
                         where: { id: lead.id },
                         data: {
@@ -313,12 +402,17 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
                         },
                     });
                     catchAllCount++;
+
+                    // Learn pattern for catch-all too (first.last is safest)
+                    if (!domainPatternCache.has(domainKey)) {
+                        domainPatternCache.set(domainKey, catchAllCandidate.pattern);
+                    }
+
                     sendEvent({
                         type: "progress", processed: processed + 1, found, total: leads.length,
                         lead: { id: lead.id, name: lead.name, email: catchAllResult.email, status: "catch_all", pattern: catchAllCandidate.pattern },
                     });
                 } else if (errorResult && errorCandidate) {
-                    // Network error / port 25 block: save the guess as error but keep the email so user can see the AI's best guess
                     await prisma.lead.update({
                         where: { id: lead.id },
                         data: {
@@ -347,7 +441,8 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
                 processed++;
 
                 // Delay between leads to avoid SMTP blacklisting
-                await new Promise((r) => setTimeout(r, 1000));
+                // Shorter delay if we used a known pattern (less SMTP probing)
+                await new Promise((r) => setTimeout(r, knownPattern ? 300 : 1000));
             } catch (err) {
                 console.error(`Error enriching lead ${lead.id}:`, err);
                 await prisma.lead.update({
@@ -391,7 +486,6 @@ emailRouter.post("/verify-leads", async (req: Request, res: Response) => {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
             Connection: "keep-alive",
-            "Access-Control-Allow-Origin": "*",
         });
 
         const sendEvent = (data: any) => {
@@ -502,7 +596,6 @@ emailRouter.post("/find-domains", async (req: Request, res: Response) => {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
             Connection: "keep-alive",
-            "Access-Control-Allow-Origin": "*",
         });
 
         const sendEvent = (data: any) => {
