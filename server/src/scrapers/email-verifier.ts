@@ -129,21 +129,92 @@ function smtpCheck(
     });
 }
 
+// ─── Remote SMTP Verifier (calls the Hostinger microservice) ───
+async function verifyViaRemote(
+    email: string,
+    url: string,
+    apiKey: string
+): Promise<EmailVerification> {
+    try {
+        const res = await fetch(`${url}/verify`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-API-KEY": apiKey,
+            },
+            body: JSON.stringify({ email }),
+            signal: AbortSignal.timeout(15000),
+        });
+
+        if (!res.ok) {
+            return { email, result: "error", message: `Remote verifier: ${res.status}` };
+        }
+
+        const data = await res.json() as { result: VerificationResult; mxHost?: string; message?: string };
+        return {
+            email,
+            result: data.result,
+            mxHost: data.mxHost,
+            message: data.message,
+        };
+    } catch (err: any) {
+        console.error(`Remote SMTP verifier error for ${email}:`, err.message);
+        return { email, result: "error", message: `Remote: ${err.message}` };
+    }
+}
+
+// ─── Remote batch verify ───
+async function verifyBatchViaRemote(
+    emails: string[],
+    url: string,
+    apiKey: string
+): Promise<EmailVerification[]> {
+    try {
+        const res = await fetch(`${url}/verify-batch`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-API-KEY": apiKey,
+            },
+            body: JSON.stringify({ emails }),
+            signal: AbortSignal.timeout(60000),
+        });
+
+        if (!res.ok) {
+            return emails.map(e => ({ email: e, result: "error" as VerificationResult, message: `Remote: ${res.status}` }));
+        }
+
+        const data = await res.json() as { results: EmailVerification[] };
+        return data.results;
+    } catch (err: any) {
+        console.error("Remote batch verify error:", err.message);
+        return emails.map(e => ({ email: e, result: "error" as VerificationResult, message: `Remote: ${err.message}` }));
+    }
+}
+
 export async function verifyEmail(
     email: string,
     provider: string = "local",
-    apiKey?: string
+    apiKey?: string,
+    remoteUrl?: string,
+    remoteApiKey?: string
 ): Promise<EmailVerification> {
     const domain = email.split("@")[1];
     if (!domain) return { email, result: "error", message: "Invalid email" };
 
+    // ─── Priority 1: Remote SMTP Verifier (Hostinger microservice) ───
+    if (remoteUrl && remoteApiKey) {
+        return verifyViaRemote(email, remoteUrl, remoteApiKey);
+    }
+
+    // ─── Priority 2: Hunter API ───
     if (provider === "hunter" && apiKey) {
         try {
             const res = await fetch(`https://api.hunter.io/v2/email-verifier?email=${email}&api_key=${apiKey}`);
             if (!res.ok) return { email, result: "error", message: `Hunter API error: ${res.status}` };
 
-            const data = await res.json();
-            const status = data?.data?.status; // 'valid', 'invalid', 'accept_all', 'webmail', 'disposable', 'unknown'
+            const data = await res.json() as any;
+            const status = data?.data?.status;
 
             if (status === "valid") return { email, result: "valid", message: "Hunter: Valid" };
             if (status === "accept_all") return { email, result: "catch_all", message: "Hunter: Accept All" };
@@ -155,13 +226,14 @@ export async function verifyEmail(
         }
     }
 
+    // ─── Priority 3: ZeroBounce API ───
     if (provider === "zerobounce" && apiKey) {
         try {
             const res = await fetch(`https://api.zerobounce.net/v2/validate?api_key=${apiKey}&email=${email}`);
             if (!res.ok) return { email, result: "error", message: `ZeroBounce API error: ${res.status}` };
 
-            const data = await res.json();
-            const status = data?.status; // 'valid', 'invalid', 'catch-all', 'unknown', 'spamtrap', 'abuse', 'do_not_mail'
+            const data = await res.json() as any;
+            const status = data?.status;
 
             if (status === "valid") return { email, result: "valid", message: "ZeroBounce: Valid" };
             if (status === "catch-all") return { email, result: "catch_all", message: "ZeroBounce: Catch-all" };
@@ -173,8 +245,7 @@ export async function verifyEmail(
         }
     }
 
-    // Default: local SMTP check (requires port 25 to be open)
-
+    // ─── Priority 4: Local SMTP check (requires port 25 to be open) ───
     try {
         const mxRecords = await getMxRecords(domain);
         if (!mxRecords.length) {
@@ -197,8 +268,16 @@ export async function verifyEmail(
 export async function verifyEmailCandidates(
     emails: string[],
     provider: string = "local",
-    apiKey?: string
+    apiKey?: string,
+    remoteUrl?: string,
+    remoteApiKey?: string
 ): Promise<EmailVerification[]> {
+    // ─── Use remote batch endpoint if available (most efficient) ───
+    if (remoteUrl && remoteApiKey) {
+        return verifyBatchViaRemote(emails, remoteUrl, remoteApiKey);
+    }
+
+    // ─── Otherwise verify one by one ───
     const results: EmailVerification[] = [];
 
     for (const email of emails) {

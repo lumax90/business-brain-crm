@@ -132,7 +132,7 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
 
         // Fetch Verification Provider Settings once for the batch
         const settingsList = await prisma.appSetting.findMany({
-            where: { key: { in: ["EMAIL_VERIFICATION_PROVIDER", "HUNTER_API_KEY", "ZEROBOUNCE_API_KEY", "OPENAI_API_KEY", "AI_MODEL"] } }
+            where: { key: { in: ["EMAIL_VERIFICATION_PROVIDER", "HUNTER_API_KEY", "ZEROBOUNCE_API_KEY", "OPENAI_API_KEY", "AI_MODEL", "SMTP_VERIFIER_URL", "SMTP_VERIFIER_API_KEY"] } }
         });
         const settings = settingsList.reduce((acc: Record<string, string>, curr) => {
             acc[curr.key] = curr.value;
@@ -142,6 +142,8 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
         const verificationProvider = settings["EMAIL_VERIFICATION_PROVIDER"] || "local";
         const verificationApiKey = verificationProvider === "hunter" ? settings["HUNTER_API_KEY"] :
             verificationProvider === "zerobounce" ? settings["ZEROBOUNCE_API_KEY"] : undefined;
+        const remoteUrl = settings["SMTP_VERIFIER_URL"] || "";
+        const remoteApiKey = settings["SMTP_VERIFIER_API_KEY"] || "";
 
         // ─── PATTERN LEARNING CACHE ───
         // Key: domain → Value: winning email pattern (e.g. "first.last", "flast")
@@ -358,7 +360,7 @@ emailRouter.post("/enrich", async (req: Request, res: Response) => {
                     }
                 }
 
-                const verifications = await verifyEmailCandidates(topEmails, verificationProvider, verificationApiKey);
+                const verifications = await verifyEmailCandidates(topEmails, verificationProvider, verificationApiKey, remoteUrl, remoteApiKey);
 
                 // Find best result
                 const validResult = verifications.find((v) => v.result === "valid");
@@ -499,7 +501,7 @@ emailRouter.post("/verify-leads", async (req: Request, res: Response) => {
 
         // Fetch Verification Provider Settings once for the batch
         const settingsList = await prisma.appSetting.findMany({
-            where: { key: { in: ["EMAIL_VERIFICATION_PROVIDER", "HUNTER_API_KEY", "ZEROBOUNCE_API_KEY"] } }
+            where: { key: { in: ["EMAIL_VERIFICATION_PROVIDER", "HUNTER_API_KEY", "ZEROBOUNCE_API_KEY", "SMTP_VERIFIER_URL", "SMTP_VERIFIER_API_KEY"] } }
         });
         const settings = settingsList.reduce((acc: Record<string, string>, curr) => {
             acc[curr.key] = curr.value;
@@ -509,11 +511,13 @@ emailRouter.post("/verify-leads", async (req: Request, res: Response) => {
         const verificationProvider = settings["EMAIL_VERIFICATION_PROVIDER"] || "local";
         const verificationApiKey = verificationProvider === "hunter" ? settings["HUNTER_API_KEY"] :
             verificationProvider === "zerobounce" ? settings["ZEROBOUNCE_API_KEY"] : undefined;
+        const remoteUrl = settings["SMTP_VERIFIER_URL"] || "";
+        const remoteApiKey = settings["SMTP_VERIFIER_API_KEY"] || "";
 
         for (const lead of leads) {
             if (!lead.email) { processed++; continue; }
 
-            const verifications = await verifyEmailCandidates([lead.email], verificationProvider, verificationApiKey);
+            const verifications = await verifyEmailCandidates([lead.email], verificationProvider, verificationApiKey, remoteUrl, remoteApiKey);
             const result = verifications[0];
 
             let emailStatus = "not_found";
