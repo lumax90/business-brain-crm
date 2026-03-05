@@ -6,13 +6,26 @@ export interface EmailCandidate {
     priority: number;
 }
 
+export function normalizeName(name: string): string {
+    if (!name) return "";
+    const trMap: Record<string, string> = {
+        'ı': 'i', 'ğ': 'g', 'ü': 'u', 'ş': 's', 'ö': 'o', 'ç': 'c',
+        'I': 'i', 'Ğ': 'g', 'Ü': 'u', 'Ş': 's', 'Ö': 'o', 'Ç': 'c',
+    };
+    return name
+        .replace(/[ıIğĞüÜşŞöÖçÇ]/g, (char) => trMap[char])
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+}
+
 export function guessEmails(
     firstName: string,
     lastName: string,
     domain: string
 ): EmailCandidate[] {
-    const first = firstName.toLowerCase().replace(/[^a-z]/g, "");
-    const last = lastName.toLowerCase().replace(/[^a-z]/g, "");
+    const first = normalizeName(firstName).replace(/[0-9]/g, "");
+    const last = normalizeName(lastName).replace(/[0-9]/g, "");
     const fInitial = first.charAt(0);
     const lInitial = last.charAt(0);
 
@@ -47,8 +60,8 @@ export function generateFromPattern(
     domain: string,
     pattern: string
 ): string | null {
-    const first = firstName.toLowerCase().replace(/[^a-z]/g, "");
-    const last = lastName.toLowerCase().replace(/[^a-z]/g, "");
+    const first = normalizeName(firstName).replace(/[0-9]/g, "");
+    const last = normalizeName(lastName).replace(/[0-9]/g, "");
     const fInitial = first.charAt(0);
     const lInitial = last.charAt(0);
 
@@ -91,13 +104,11 @@ function checkMx(domain: string): Promise<boolean> {
 export async function guessCompanyDomain(companyName: string): Promise<string> {
     if (!companyName) return "";
 
-    const cleaned = companyName
-        .toLowerCase()
+    const cleaned = normalizeName(companyName)
         .replace(
-            /\b(inc\.?|llc\.?|ltd\.?|corp\.?|co\.?|group|solutions|technologies|tech|consulting|agency|studios?|labs?|gmbh|s\.?a\.?|plc|limited|sanayi|ticaret|a\.?ş\.?|şti\.?|anonim|şirketi)\b/gi,
+            /\b(inc|llc|ltd|corp|co|group|solutions|technologies|tech|consulting|agency|studios|labs|gmbh|sa|plc|limited|sanayi|ticaret|as|sti|anonim|sirketi)\b/g,
             ""
         )
-        .replace(/[^a-z0-9\s]/g, "")
         .trim()
         .replace(/\s+/g, "");
 
